@@ -312,6 +312,9 @@ export interface ElectronAPI {
   // Deep link navigation listener (for external craftagents:// URLs)
   onDeepLinkNavigate(callback: (nav: DeepLinkNavigation) => void): () => void
 
+  // External file open (e.g. Finder double-click on .md file)
+  onExternalFileOpen(callback: (filePath: string) => void): () => void
+
   // Auth
   showLogoutConfirmation(): Promise<boolean>
   showDeleteSessionConfirmation(name: string): Promise<boolean>
@@ -576,6 +579,7 @@ export interface ElectronAPI {
 export type RightSidebarPanel =
   | { type: 'files'; path?: string }
   | { type: 'history' }
+  | { type: 'docs' }
   | { type: 'none' }
 
 /**

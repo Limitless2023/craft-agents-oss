@@ -89,6 +89,7 @@ export const RPC_CHANNELS = {
     VERSIONS: 'system:versions',
     HOME_DIR: 'system:homeDir',
     IS_DEBUG_MODE: 'system:isDebugMode',
+    OPEN_FILE: 'system:openFile',
   },
   update: {
     CHECK: 'update:check',

@@ -97,6 +97,7 @@ import { getPiModelsForAuthProvider, getAllPiModels } from '@craft-agent/shared/
 import { initNotificationService, initBadgeIcon, initInstanceBadge, updateBadgeCount } from './notifications'
 import { checkForUpdatesOnLaunch, setAutoUpdateEventSink, isUpdating } from './auto-update'
 import type { EventSink } from '@craft-agent/server-core/transport'
+import { RPC_CHANNELS } from '../shared/types'
 import { validateGitBashPath } from '@craft-agent/server-core/services'
 
 // Initialize electron-log for renderer process support
@@ -189,6 +190,9 @@ let moduleClientResolver: ((webContentsId: number) => string | undefined) | null
 // Store pending deep link if app not ready yet (cold start)
 let pendingDeepLink: string | null = null
 
+// Store pending file open if app not ready yet (cold start via Finder double-click)
+let pendingOpenFile: string | null = null
+
 // Set app name early (before app.whenReady) to ensure correct macOS menu bar title
 // Supports multi-instance dev: CRAFT_APP_NAME env var (e.g., "Craft Agents [1]")
 app.setName(process.env.CRAFT_APP_NAME || 'Craft Agents')
@@ -262,6 +266,27 @@ app.on('open-url', (event, url) => {
   } else {
     // App not ready - store for later
     pendingDeepLink = url
+  }
+})
+
+// Handle file open from Finder (macOS) — e.g. double-click .md file
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  mainLog.info('Received open-file:', filePath)
+
+  if (moduleSink && windowManager) {
+    // App is running — broadcast to all renderer windows
+    moduleSink(RPC_CHANNELS.system.OPEN_FILE, { to: 'all' }, filePath)
+    // Focus the first window
+    const windows = windowManager.getAllWindows()
+    if (windows.length > 0) {
+      const win = windows[0].window
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+  } else {
+    // App not ready - store for later
+    pendingOpenFile = filePath
   }
 })
 
@@ -767,6 +792,13 @@ app.whenReady().then(async () => {
       mainLog.info('Processing pending deep link:', pendingDeepLink)
       await handleDeepLink(pendingDeepLink, windowManager, moduleSink ?? undefined, moduleClientResolver ?? undefined)
       pendingDeepLink = null
+    }
+
+    // Process pending file open from cold start (e.g. Finder double-click when app was closed)
+    if (pendingOpenFile && moduleSink) {
+      mainLog.info('Processing pending open-file:', pendingOpenFile)
+      moduleSink(RPC_CHANNELS.system.OPEN_FILE, { to: 'all' }, pendingOpenFile)
+      pendingOpenFile = null
     }
 
     mainLog.info('App initialized successfully')

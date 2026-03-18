@@ -71,12 +71,20 @@ export function PanelSlot({
   }, [handleClose])
 
   // Override AppShellContext so ChatPage/PanelHeader gets our per-panel close button
-  // and isFocusedPanel for input field appearance
+  // and isFocusedPanel for input field appearance.
+  // Combine the parent's rightSidebarButton (e.g. Docs toggle) with the per-panel close button.
+  const combinedRightSidebarButton = useMemo(() => (
+    <>
+      {parentContext.rightSidebarButton}
+      {closeButton}
+    </>
+  ), [parentContext.rightSidebarButton, closeButton])
+
   const contextOverride = useMemo(() => ({
     ...parentContext,
-    rightSidebarButton: closeButton,
+    rightSidebarButton: combinedRightSidebarButton,
     isFocusedPanel,
-  }), [parentContext, closeButton, isFocusedPanel])
+  }), [parentContext, combinedRightSidebarButton, isFocusedPanel])
 
   const handlePointerDown = useCallback(() => {
     if (!isFocusedPanel) {

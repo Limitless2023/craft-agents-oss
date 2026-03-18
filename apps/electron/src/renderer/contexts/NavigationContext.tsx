@@ -1157,10 +1157,14 @@ export function NavigationProvider({
 
   const toggleRightSidebar = useCallback((panel?: RightSidebarPanel) => {
     const currentSidebar = rightSidebarRef.current
-    const newPanel = panel || (currentSidebar && currentSidebar.type !== 'none'
-      ? { type: 'none' as const }
-      : { type: 'none' as const })
-    updateRightSidebar(newPanel)
+    // If a specific panel is given, toggle between it and 'none'
+    if (panel && panel.type !== 'none') {
+      const isAlreadyOpen = currentSidebar && currentSidebar.type === panel.type
+      updateRightSidebar(isAlreadyOpen ? { type: 'none' } : panel)
+    } else {
+      // No panel specified — just close
+      updateRightSidebar({ type: 'none' })
+    }
   }, [updateRightSidebar])
 
   // =========================================================================

@@ -30,6 +30,7 @@ import {
   Radio,
   Bot,
   Info,
+  BookOpen,
 } from "lucide-react"
 // SessionStatusIcons no longer used - icons come from dynamic sessionStatuses
 import { SourceAvatar } from "@/components/ui/source-avatar"
@@ -70,6 +71,8 @@ import {
 import { SessionList, type ChatGroupingMode } from "./SessionList"
 import { MainContentPanel } from "./MainContentPanel"
 import { PanelStackContainer } from "./PanelStackContainer"
+import { RightSidebar } from "./RightSidebar"
+import { PanelHeaderCenterButton } from "@/components/ui/PanelHeaderCenterButton"
 import type { ChatDisplayHandle } from "./ChatDisplay"
 import { LeftSidebar } from "./LeftSidebar"
 import { useSession } from "@/hooks/useSession"
@@ -560,7 +563,7 @@ function AppShellContent({
   const sessionListHandleRef = React.useRef<HTMLDivElement>(null)
   const [session, setSession] = useSession()
   const { resolvedMode, isDark, setMode } = useTheme()
-  const { canGoBack, canGoForward, goBack, goForward, navigateToSource, navigateToSession } = useNavigation()
+  const { canGoBack, canGoForward, goBack, goForward, navigateToSource, navigateToSession, updateRightSidebar, toggleRightSidebar } = useNavigation()
 
   // Double-Esc interrupt feature: first Esc shows warning, second Esc interrupts
   const { handleEscapePress } = useEscapeInterrupt()
@@ -568,6 +571,11 @@ function AppShellContent({
   // UNIFIED NAVIGATION STATE - single source of truth from NavigationContext
   // Derived from focused panel's route — all panels are peers
   const navState = useNavigationState()
+
+  // Right sidebar state
+  const rightSidebarPanel = navState.rightSidebar
+  const isRightSidebarOpen = !!rightSidebarPanel && rightSidebarPanel.type !== 'none'
+  const RIGHT_SIDEBAR_WIDTH = 240
 
   const store = useStore()
   const panelStack = useAtomValue(panelStackAtom)
@@ -1561,7 +1569,14 @@ function AppShellContent({
     enabledModes,
     sessionStatuses: effectiveSessionStatuses,
     onSessionSourcesChange: handleSessionSourcesChange,
-    rightSidebarButton: null,
+    rightSidebarButton: (
+      <PanelHeaderCenterButton
+        icon={<BookOpen className="h-4 w-4" />}
+        onClick={() => toggleRightSidebar({ type: 'docs' })}
+        tooltip="Info"
+        className={isRightSidebarOpen ? 'opacity-100' : undefined}
+      />
+    ),
     // Search state for ChatDisplay highlighting
     sessionListSearchQuery: searchActive ? searchQuery : undefined,
     isSearchModeActive: searchActive,
@@ -1574,7 +1589,7 @@ function AppShellContent({
     automationTestResults,
     getAutomationHistory,
     onReplayAutomation: handleReplayAutomation,
-  }), [contextValue, handleDeleteSession, sources, skills, labelConfigs, handleSessionLabelsChange, enabledModes, effectiveSessionStatuses, handleSessionSourcesChange, searchActive, searchQuery, handleChatMatchInfoChange, handleTestAutomation, handleToggleAutomation, handleDuplicateAutomation, handleDeleteAutomation, automationTestResults, getAutomationHistory, handleReplayAutomation])
+  }), [contextValue, handleDeleteSession, sources, skills, labelConfigs, handleSessionLabelsChange, enabledModes, effectiveSessionStatuses, handleSessionSourcesChange, searchActive, searchQuery, handleChatMatchInfoChange, handleTestAutomation, handleToggleAutomation, handleDuplicateAutomation, handleDeleteAutomation, automationTestResults, getAutomationHistory, handleReplayAutomation, toggleRightSidebar, isRightSidebarOpen])
 
   // Persist expanded folders to localStorage (workspace-scoped)
   React.useEffect(() => {
@@ -3209,9 +3224,33 @@ function AppShellContent({
           }
           navigatorWidth={effectiveSidebarAndNavigatorHidden ? 0 : sessionListWidth}
           isSidebarAndNavigatorHidden={effectiveSidebarAndNavigatorHidden}
-          isRightSidebarVisible={false}
+          isRightSidebarVisible={isRightSidebarOpen}
           isResizing={!!isResizing}
         />
+
+        {/* Right Sidebar - Docs / Files / History */}
+        {isRightSidebarOpen && rightSidebarPanel && (
+          <div
+            className="h-full shrink-0 overflow-hidden bg-background shadow-middle"
+            style={{
+              width: RIGHT_SIDEBAR_WIDTH,
+              borderRadius: RADIUS_INNER,
+            }}
+          >
+            <RightSidebar
+              panel={rightSidebarPanel}
+              closeButton={
+                <button
+                  onClick={() => updateRightSidebar({ type: 'none' })}
+                  className="p-1 rounded-[6px] text-muted-foreground/50 hover:text-foreground transition-colors"
+                  title="Close sidebar"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              }
+            />
+          </div>
+        )}
 
         {/* Sidebar Resize Handle (absolute, hidden in focused mode) */}
         {!effectiveSidebarAndNavigatorHidden && (

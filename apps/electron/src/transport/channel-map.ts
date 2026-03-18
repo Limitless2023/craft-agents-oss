@@ -101,6 +101,9 @@ export const CHANNEL_MAP = {
   // Deep link
   onDeepLinkNavigate: listener(RPC_CHANNELS.deeplink.NAVIGATE),
 
+  // External file open (e.g. Finder double-click)
+  onExternalFileOpen: listener(RPC_CHANNELS.system.OPEN_FILE),
+
   // Auth
   showLogoutConfirmation: invoke(RPC_CHANNELS.auth.SHOW_LOGOUT_CONFIRMATION),
   showDeleteSessionConfirmation: invoke(RPC_CHANNELS.auth.SHOW_DELETE_SESSION_CONFIRMATION),

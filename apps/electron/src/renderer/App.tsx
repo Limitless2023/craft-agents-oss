@@ -1279,6 +1279,14 @@ export default function App() {
   const handleOpenFile = linkInterceptor.handleOpenFile
   const handleOpenUrl = linkInterceptor.handleOpenUrl
 
+  // Listen for external file open events (e.g. Finder double-click on .md file)
+  useEffect(() => {
+    const cleanup = window.electronAPI.onExternalFileOpen((filePath: string) => {
+      handleOpenFile(filePath)
+    })
+    return cleanup
+  }, [handleOpenFile])
+
   const handleOpenSettings = useCallback(() => {
     navigate(routes.view.settings())
   }, [])
