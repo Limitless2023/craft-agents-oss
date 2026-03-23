@@ -16,23 +16,10 @@ cp "$BUILD/main.cjs" "$APP_DIST/main.cjs"
 echo "Replacing bootstrap-preload.cjs..."
 cp "$BUILD/bootstrap-preload.cjs" "$APP_DIST/bootstrap-preload.cjs"
 
-# --- Step 3: Replace renderer bundles + index.html ---
-echo "Replacing renderer bundles..."
-
-# Remove old hashed files
-for prefix in main- playground- sonner-; do
-  rm -f "$APP_DIST/renderer/assets/${prefix}"*.js "$APP_DIST/renderer/assets/${prefix}"*.js.map
-done
-
-# Copy new builds
-for prefix in main- playground- sonner-; do
-  cp "$BUILD/renderer/assets/${prefix}"*.js "$APP_DIST/renderer/assets/" 2>/dev/null || true
-  cp "$BUILD/renderer/assets/${prefix}"*.js.map "$APP_DIST/renderer/assets/" 2>/dev/null || true
-done
-
-# Copy index.html directly from build output (avoids fragile hash detection)
-cp "$BUILD/renderer/index.html" "$APP_DIST/renderer/index.html"
-echo "Renderer replaced (using build output index.html)"
+# --- Step 3: Sync entire renderer directory ---
+echo "Syncing renderer..."
+rsync -a --delete "$BUILD/renderer/" "$APP_DIST/renderer/"
+echo "Renderer synced"
 
 # --- Step 5: Add .md file association to Info.plist ---
 if ! /usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes" "$PLIST" &>/dev/null; then
@@ -54,7 +41,10 @@ else
   echo "File association already exists, skipping"
 fi
 
-# --- Step 6: Re-sign app (modifying Info.plist invalidates the original signature) ---
+# --- Step 6: Clear provenance + re-sign (macOS 26 blocks ad-hoc apps with stale provenance) ---
+echo "Clearing provenance attributes..."
+xattr -cr "/Applications/Craft Agents.app"
+
 echo "Re-signing app (ad-hoc)..."
 codesign --force --deep --sign - "/Applications/Craft Agents.app"
 
