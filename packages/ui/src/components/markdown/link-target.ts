@@ -44,6 +44,16 @@ export function resolveMarkdownLinkTarget(target: string): ResolvedMarkdownLinkT
     return { kind: 'file', path: fileUrlPath }
   }
 
+  // Absolute or home-relative paths — always file links (handles spaces, unicode, etc.)
+  // Decode URI encoding (%20 → space, %E4%B8%AD → 中) since markdown renderers encode hrefs
+  if (trimmed.startsWith('/') || trimmed.startsWith('~/')) {
+    try {
+      return { kind: 'file', path: decodeURIComponent(trimmed) }
+    } catch {
+      return { kind: 'file', path: trimmed }
+    }
+  }
+
   if (isFilePathTarget(trimmed)) {
     return { kind: 'file', path: trimmed }
   }

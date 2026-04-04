@@ -568,11 +568,13 @@ function AppShellContent({
     })
   }, [])
 
-  const [isResizing, setIsResizing] = React.useState<'sidebar' | 'session-list' | null>(null)
+  const [isResizing, setIsResizing] = React.useState<'sidebar' | 'session-list' | 'right-sidebar' | null>(null)
   const [sidebarHandleY, setSidebarHandleY] = React.useState<number | null>(null)
   const [sessionListHandleY, setSessionListHandleY] = React.useState<number | null>(null)
+  const [rightSidebarHandleY, setRightSidebarHandleY] = React.useState<number | null>(null)
   const resizeHandleRef = React.useRef<HTMLDivElement>(null)
   const sessionListHandleRef = React.useRef<HTMLDivElement>(null)
+  const rightSidebarHandleRef = React.useRef<HTMLDivElement>(null)
   const [session, setSession] = useSession()
   const { resolvedMode, isDark, setMode } = useTheme()
   const { canGoBack, canGoForward, goBack, goForward, navigateToSource, navigateToSession, updateRightSidebar, toggleRightSidebar } = useNavigation()
@@ -587,7 +589,9 @@ function AppShellContent({
   // Right sidebar state
   const rightSidebarPanel = navState.rightSidebar
   const isRightSidebarOpen = !!rightSidebarPanel && rightSidebarPanel.type !== 'none'
-  const RIGHT_SIDEBAR_WIDTH = 240
+  const [rightSidebarWidth, setRightSidebarWidth] = React.useState(() =>
+    storage.get(storage.KEYS.rightSidebarWidth, 240)
+  )
 
   const store = useStore()
   const panelStack = useAtomValue(panelStackAtom)
@@ -1243,6 +1247,14 @@ function AppShellContent({
           const rect = sessionListHandleRef.current.getBoundingClientRect()
           setSessionListHandleY(e.clientY - rect.top)
         }
+      } else if (isResizing === 'right-sidebar') {
+        // Right sidebar resizes from the right edge inward
+        const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 180), 480)
+        setRightSidebarWidth(newWidth)
+        if (rightSidebarHandleRef.current) {
+          const rect = rightSidebarHandleRef.current.getBoundingClientRect()
+          setRightSidebarHandleY(e.clientY - rect.top)
+        }
       }
     }
 
@@ -1253,6 +1265,9 @@ function AppShellContent({
       } else if (isResizing === 'session-list') {
         storage.set(storage.KEYS.sessionListWidth, sessionListWidth)
         setSessionListHandleY(null)
+      } else if (isResizing === 'right-sidebar') {
+        storage.set(storage.KEYS.rightSidebarWidth, rightSidebarWidth)
+        setRightSidebarHandleY(null)
       }
       setIsResizing(null)
     }
@@ -1268,6 +1283,7 @@ function AppShellContent({
     isResizing,
     sidebarWidth,
     sessionListWidth,
+    rightSidebarWidth,
     isSidebarVisible,
   ])
 
@@ -3244,12 +3260,34 @@ function AppShellContent({
         {/* Right Sidebar - Docs / Files / History */}
         {isRightSidebarOpen && rightSidebarPanel && (
           <div
-            className="h-full shrink-0 overflow-hidden bg-background shadow-middle"
+            className="h-full shrink-0 overflow-hidden bg-background shadow-middle relative"
             style={{
-              width: RIGHT_SIDEBAR_WIDTH,
+              width: rightSidebarWidth,
               borderRadius: RADIUS_INNER,
             }}
           >
+            {/* Right Sidebar Resize Handle */}
+            <div
+              ref={rightSidebarHandleRef}
+              onMouseDown={(e) => { e.preventDefault(); setIsResizing('right-sidebar') }}
+              onMouseMove={(e) => {
+                if (rightSidebarHandleRef.current) {
+                  const rect = rightSidebarHandleRef.current.getBoundingClientRect()
+                  setRightSidebarHandleY(e.clientY - rect.top)
+                }
+              }}
+              onMouseLeave={() => { if (isResizing !== 'right-sidebar') setRightSidebarHandleY(null) }}
+              className="absolute left-0 top-0 bottom-0 cursor-col-resize z-10 flex justify-center"
+              style={{ width: PANEL_SASH_HIT_WIDTH, marginLeft: -PANEL_SASH_HALF_HIT_WIDTH }}
+            >
+              <div
+                className="h-full"
+                style={{
+                  ...getResizeGradientStyle(rightSidebarHandleY, rightSidebarHandleRef.current?.clientHeight ?? null),
+                  width: PANEL_SASH_LINE_WIDTH,
+                }}
+              />
+            </div>
             <RightSidebar
               panel={rightSidebarPanel}
               closeButton={

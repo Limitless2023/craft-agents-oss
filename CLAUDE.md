@@ -37,6 +37,19 @@ Double-clicking `.md` files in Finder opens them in Craft Agents as a preview ov
 - `apps/electron/src/shared/types.ts` — `onExternalFileOpen` type definition
 - `apps/electron/src/renderer/App.tsx` — `useEffect` listener for external file open events
 
+### Local File Path Links — Click to Open
+
+Clicking local file path links in AI messages (e.g. `[report](/Users/foo/report.pdf)`) now works correctly instead of showing "Invalid URL" error.
+
+**How it works:**
+1. `link-target.ts` — paths starting with `/` or `~/` are identified as file links (with `decodeURIComponent` for `%20`/unicode)
+2. `useLinkInterceptor.ts` — `handleOpenUrl` intercepts local paths (`/`, `~/`, `file://`) and routes to `handleOpenFile`
+3. File routing: PDF → system default app, images → in-app preview, markdown/code → in-app preview, folders → Finder
+
+**Modified files:**
+- `packages/ui/src/components/markdown/link-target.ts` — absolute path detection + URI decoding
+- `apps/electron/src/renderer/hooks/useLinkInterceptor.ts` — local path routing in `handleOpenUrl`, PDF → external open
+
 **Patching notes (Info.plist):**
 - `patch-app.sh` adds `CFBundleDocumentTypes` with both `CFBundleTypeExtensions` and `LSItemContentTypes` (UTI: `net.daringfireball.markdown`, `public.plain-text`)
 - Modifying `Info.plist` invalidates the Developer ID signature → script re-signs with ad-hoc (`codesign --force --deep --sign -`)

@@ -308,6 +308,7 @@ export interface ElectronAPI {
 
   // Server filesystem browsing (remote mode)
   listServerDirectory(dirPath: string): Promise<DirectoryListingResult>
+  listFiles(dirPath: string): Promise<{ path: string; items: Array<{ name: string; path: string; type: 'file' | 'directory'; size?: number }> }>
   // Debug: send renderer logs to main process log file
   debugLog(...args: unknown[]): void
 

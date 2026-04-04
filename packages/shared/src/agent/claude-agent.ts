@@ -40,6 +40,7 @@ import {
   type AuthRequest,
 } from './session-scoped-tools.ts';
 import { type AutomationSystem, type SdkAutomationCallbackMatcher } from '../automations/index.ts';
+import { loadCliHooks } from '../automations/cli-hooks.ts';
 import {
   getPermissionMode,
   getPermissionModeDiagnostics,
@@ -1264,6 +1265,18 @@ export class ClaudeAgent extends BaseAgent {
               mergedHooks[event] = [...mergedHooks[event]!, ...matchers];
             } else {
               // Add new event hooks
+              mergedHooks[event] = matchers;
+            }
+          }
+
+          // Merge CLI hooks from ~/.claude/settings.json
+          // Enables Vibehood, Vibe Island, and other CLI hook apps
+          const cliHooks = loadCliHooks();
+          for (const [event, matchers] of Object.entries(cliHooks) as [string, SdkAutomationCallbackMatcher[]][]) {
+            if (!matchers) continue;
+            if (mergedHooks[event]) {
+              mergedHooks[event] = [...mergedHooks[event]!, ...matchers];
+            } else {
               mergedHooks[event] = matchers;
             }
           }

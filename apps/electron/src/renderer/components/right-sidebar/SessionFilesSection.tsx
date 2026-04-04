@@ -74,6 +74,39 @@ export interface SessionFilesSectionProps {
   sessionFolderPath?: string
   /** Hide section header when embedded inside compact containers (e.g. popovers) */
   hideHeader?: boolean
+  /** Filter query — only show files whose name matches (case-insensitive) */
+  filterQuery?: string
+}
+
+/** Recursively filter file tree by name match. Directories are kept if any child matches. */
+function filterFileTree(entries: SessionFile[], query: string): SessionFile[] {
+  const q = query.toLowerCase()
+  return entries.reduce<SessionFile[]>((acc, entry) => {
+    if (entry.type === 'directory') {
+      const filteredChildren = filterFileTree(entry.children || [], query)
+      if (filteredChildren.length > 0) {
+        acc.push({ ...entry, children: filteredChildren })
+      }
+    } else if (entry.name.toLowerCase().includes(q)) {
+      acc.push(entry)
+    }
+    return acc
+  }, [])
+}
+
+/** Collect all directory paths from a filtered tree (for auto-expanding matches). */
+function collectAllPaths(entries: SessionFile[]): Set<string> {
+  const paths = new Set<string>()
+  const visit = (items: SessionFile[]) => {
+    for (const item of items) {
+      paths.add(item.path)
+      if (item.type === 'directory' && item.children) {
+        visit(item.children)
+      }
+    }
+  }
+  visit(entries)
+  return paths
 }
 
 /**
@@ -418,7 +451,7 @@ function FileTreeItem({
 /**
  * Section displaying session files as a tree
  */
-export function SessionFilesSection({ sessionId, className, sessionFolderPath, hideHeader = false }: SessionFilesSectionProps) {
+export function SessionFilesSection({ sessionId, className, sessionFolderPath, hideHeader = false, filterQuery }: SessionFilesSectionProps) {
   const [files, setFiles] = useState<SessionFile[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
@@ -589,29 +622,39 @@ export function SessionFilesSection({ sessionId, className, sessionFolderPath, h
       {/* File tree - px-2 is on nav to match LeftSidebar exactly (constrains grid width) */}
       {/* overflow-x-hidden prevents horizontal scroll, forcing truncation */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden pb-2 min-h-0">
-        {files.length === 0 ? (
-          <div className="px-4 text-muted-foreground select-none">
-            <p className="text-xs">
-              {isLoading ? 'Loading...' : 'Files attached or created by this chat will appear here.'}
-            </p>
-          </div>
-        ) : (
-          /* Root nav has px-2 to match LeftSidebar exactly - this constrains grid width */
-          <nav className="grid gap-0.5 px-2">
-            {files.map((file) => (
-              <FileTreeItem
-                key={file.path}
-                file={file}
-                depth={0}
-                expandedPaths={expandedPaths}
-                onToggleExpand={handleToggleExpand}
-                onFileClick={handleFileClick}
-                onFileDoubleClick={handleFileDoubleClick}
-                onRevealInFileManager={handleRevealInFileManager}
-              />
-            ))}
-          </nav>
-        )}
+        {(() => {
+          const displayFiles = filterQuery ? filterFileTree(files, filterQuery) : files
+          // When filtering, auto-expand all directories so matches are visible
+          const effectiveExpanded = filterQuery ? collectAllPaths(displayFiles) : expandedPaths
+
+          if (displayFiles.length === 0) {
+            return (
+              <div className="px-4 text-muted-foreground select-none">
+                <p className="text-xs">
+                  {isLoading ? 'Loading...' : filterQuery ? 'No files match.' : 'Files attached or created by this chat will appear here.'}
+                </p>
+              </div>
+            )
+          }
+
+          return (
+            /* Root nav has px-2 to match LeftSidebar exactly - this constrains grid width */
+            <nav className="grid gap-0.5 px-2">
+              {displayFiles.map((file) => (
+                <FileTreeItem
+                  key={file.path}
+                  file={file}
+                  depth={0}
+                  expandedPaths={effectiveExpanded}
+                  onToggleExpand={handleToggleExpand}
+                  onFileClick={handleFileClick}
+                  onFileDoubleClick={handleFileDoubleClick}
+                  onRevealInFileManager={handleRevealInFileManager}
+                />
+              ))}
+            </nav>
+          )
+        })()}
       </div>
     </div>
   )

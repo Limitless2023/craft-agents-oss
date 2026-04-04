@@ -148,8 +148,14 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
 
     const type = classification.type
 
-    // For image/pdf: set state immediately — the overlay handles its own async loading
-    if (type === 'image' || type === 'pdf') {
+    // PDF: open with system default app (e.g. Preview.app) instead of in-app overlay
+    if (type === 'pdf') {
+      optionsRef.current.openFileExternal(path)
+      return
+    }
+
+    // Images: show in-app preview overlay
+    if (type === 'image') {
       setPreviewState({ type, filePath: path })
       return
     }
@@ -173,10 +179,36 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
     optionsRef.current.openFileExternal(path)
   }, []) // Stable: uses optionsRef
 
-  /** URLs always open externally — no in-app browser for security */
+  /** URLs open externally, but local file paths are routed to handleOpenFile.
+   * Markdown links like [report](/Users/foo/report.pdf) or [doc](file:///path)
+   * arrive here as "URLs" but are actually local paths that should preview in-app. */
   const handleOpenUrl = useCallback((url: string) => {
+    // Local absolute paths (e.g. /Users/foo/bar.pdf)
+    if (url.startsWith('/')) {
+      handleOpenFile(url)
+      return
+    }
+
+    // Home-relative paths (e.g. ~/Desktop/bar.pdf)
+    if (url.startsWith('~/')) {
+      handleOpenFile(url)
+      return
+    }
+
+    // file:// protocol (e.g. file:///Users/foo/bar.pdf)
+    if (url.startsWith('file://')) {
+      try {
+        const localPath = decodeURIComponent(new URL(url).pathname)
+        handleOpenFile(localPath)
+      } catch {
+        // Malformed file:// URL — fall through to external open
+        optionsRef.current.openUrl(url)
+      }
+      return
+    }
+
     optionsRef.current.openUrl(url)
-  }, []) // Stable: uses optionsRef
+  }, [handleOpenFile]) // Depends on handleOpenFile (stable via optionsRef)
 
   const closePreview = useCallback(() => {
     setPreviewState(null)

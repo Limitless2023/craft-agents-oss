@@ -222,11 +222,46 @@ function stripPlaceholderLinks(text: string): string {
 }
 
 /**
+ * Encode problematic characters in local file path markdown links.
+ * Markdown parsers don't recognize [text](/path with spaces) as a link because
+ * spaces break URL parsing. This encodes spaces, brackets, etc. in the href
+ * portion of links that point to local paths (starting with / or ~/).
+ * Runs before the markdown parser so links render correctly.
+ */
+function encodeLocalPathLinks(text: string): string {
+  const codeRanges = findCodeRanges(text)
+
+  return text.replace(
+    /\[([^\[\]]*)\]\(((?:\/|~\/)[^)]*)\)/g,
+    (fullMatch, linkText: string, url: string, offset: number) => {
+      // Don't modify links inside code blocks
+      if (isInsideCode(offset, codeRanges)) return fullMatch
+
+      // Only encode if the URL contains characters that break markdown parsing
+      if (!/[ \[\]]/.test(url)) return fullMatch
+
+      const encoded = url
+        .replace(/%/g, '%25')   // Encode existing % first to avoid double-encoding
+        .replace(/ /g, '%20')
+        .replace(/\[/g, '%5B')
+        .replace(/\]/g, '%5D')
+
+      return `[${linkText}](${encoded})`
+    }
+  )
+}
+
+/**
  * Preprocess text to convert raw URLs and file paths into markdown links
  * Skips code blocks and already-linked content
  */
 export function preprocessLinks(text: string): string {
-  // First pass: strip markdown links with placeholder/fabricated URLs
+  // First pass: encode local file paths in markdown links so the parser recognizes them.
+  // [text](/path with spaces.pdf) → [text](/path%20with%20spaces.pdf)
+  // Without this, markdown parsers break on spaces in link URLs.
+  text = encodeLocalPathLinks(text)
+
+  // Second pass: strip markdown links with placeholder/fabricated URLs
   // (e.g., AI-generated `[commit](https://github.com/...)` → `\`commit\``)
   text = stripPlaceholderLinks(text)
 

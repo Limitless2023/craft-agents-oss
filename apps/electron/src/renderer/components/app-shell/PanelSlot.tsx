@@ -90,10 +90,10 @@ export function PanelSlot({
   // back button (compact mode), right sidebar button, and isFocusedPanel for input field appearance.
   // Combine the parent's rightSidebarButton (e.g. Docs toggle) with the per-panel close button.
   const combinedRightSidebarButton = useMemo(() => (
-    <>
+    <div className="flex items-center gap-1.5">
       {parentContext.rightSidebarButton}
       {closeButton}
-    </>
+    </div>
   ), [parentContext.rightSidebarButton, closeButton])
 
   const contextOverride = useMemo(() => ({

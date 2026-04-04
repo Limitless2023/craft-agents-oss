@@ -26,6 +26,7 @@ export const HANDLED_CHANNELS = [
   RPC_CHANNELS.file.GENERATE_THUMBNAIL,
   RPC_CHANNELS.fs.SEARCH,
   RPC_CHANNELS.fs.LIST_DIRECTORY,
+  RPC_CHANNELS.fs.LIST_FILES,
 ] as const
 
 export function registerFilesHandlers(server: RpcServer, deps: HandlerDeps): void {
@@ -556,5 +557,64 @@ export function registerFilesHandlers(server: RpcServer, deps: HandlerDeps): voi
       totalEntries,
       entries,
     } satisfies DirectoryListingResult
+  })
+
+  // List files and directories in a given path (for working directory file tree).
+  // Returns both files and directories with basic metadata. Single level only (lazy loading).
+  server.handle(RPC_CHANNELS.fs.LIST_FILES, async (_ctx, dirPath: string) => {
+    if (dirPath === '~' || dirPath.startsWith('~/')) {
+      dirPath = dirPath === '~' ? homedir() : join(homedir(), dirPath.slice(2))
+    }
+
+    const pathCheck = validatePathFormat(dirPath)
+    if (!pathCheck.valid) {
+      throw new Error(pathCheck.reason!)
+    }
+
+    const resolved = resolve(dirPath)
+
+    const raw = await readdir(resolved, { withFileTypes: true })
+
+    // Hidden files/dirs and common noise directories to skip
+    const SKIP_DIRS = new Set([
+      'node_modules', '.git', '.svn', '.hg', '__pycache__', '.DS_Store',
+      '.Trash', '.Spotlight-V100', '.fseventsd', 'dist', 'build', '.next',
+      '.nuxt', '.cache', '.parcel-cache', 'coverage', '.tox', '.mypy_cache',
+    ])
+
+    const items: Array<{
+      name: string
+      path: string
+      type: 'file' | 'directory'
+      size?: number
+    }> = []
+
+    for (const entry of raw) {
+      // Skip hidden files/dirs (starting with .)
+      if (entry.name.startsWith('.') && entry.name !== '.env') continue
+      // Skip noise directories
+      if (SKIP_DIRS.has(entry.name)) continue
+
+      const fullPath = join(resolved, entry.name)
+
+      if (entry.isDirectory()) {
+        items.push({ name: entry.name, path: fullPath, type: 'directory' })
+      } else if (entry.isFile()) {
+        try {
+          const s = await stat(fullPath)
+          items.push({ name: entry.name, path: fullPath, type: 'file', size: s.size })
+        } catch {
+          items.push({ name: entry.name, path: fullPath, type: 'file' })
+        }
+      }
+    }
+
+    // Sort: directories first, then alphabetically
+    items.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    })
+
+    return { path: resolved, items: items.slice(0, 500) }
   })
 }
