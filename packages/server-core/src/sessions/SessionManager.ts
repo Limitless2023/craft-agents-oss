@@ -6586,6 +6586,15 @@ export class SessionManager implements ISessionManager {
         managed.wasInterrupted = true
         break
 
+      case 'agent_state':
+        // Forward agent streaming state to renderer for spinner animation
+        this.sendEvent({
+          type: 'agent_state',
+          sessionId,
+          state: event.state,
+        }, workspaceId)
+        break
+
       // Note: working_directory_changed is user-initiated only (via updateWorkingDirectory),
       // the agent no longer has a change_working_directory tool
     }

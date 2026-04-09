@@ -13,6 +13,7 @@ import type {
   ToolDisplayMeta,
   AnnotationV1,
   PermissionRequest as BasePermissionRequest,
+  AgentStreamState,
 } from '@craft-agent/core/types'
 import type { PermissionMode } from '../agent/mode-types'
 import type { ThinkingLevel } from '../agent/thinking-levels'
@@ -25,6 +26,8 @@ import type {
 
 // Re-export generateMessageId for handler convenience
 export { generateMessageId } from '@craft-agent/core/types'
+// Re-export AgentStreamState for UI components
+export type { AgentStreamState } from '@craft-agent/core/types'
 
 // ---------------------------------------------------------------------------
 // Session types
@@ -83,6 +86,8 @@ export interface Session {
     message: string
     statusType?: string
   }
+  /** Agent streaming state for spinner animation (transient, not persisted) */
+  agentState?: AgentStreamState | null
   createdAt?: number
   messageCount?: number
   tokenUsage?: {
@@ -202,6 +207,7 @@ export type SessionEvent =
   | { type: 'usage_update'; sessionId: string; tokenUsage: { inputTokens: number; contextWindow?: number } }
   | { type: 'message_annotations_updated'; sessionId: string; messageId: string; annotations: AnnotationV1[] }
   | { type: 'working_directory_error'; sessionId: string; error: string }
+  | { type: 'agent_state'; sessionId: string; state: AgentStreamState }
 
 export interface SendMessageOptions {
   skillSlugs?: string[]

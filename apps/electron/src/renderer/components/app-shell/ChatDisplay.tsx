@@ -20,6 +20,7 @@ import { Markdown, CollapsibleMarkdownProvider, StreamingMarkdown, type RenderMo
 import { AnimatedCollapsibleContent } from "@/components/ui/collapsible"
 import {
   Spinner,
+  AgentSpinner,
   parseReadResult,
   parseBashResult,
   parseGrepResult,
@@ -1919,13 +1920,22 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                     </AnimatePresence>
                   </motion.div>
                 </AnimatePresence>
-                {/* Processing Indicator - always visible while processing */}
+                {/* Agent Spinner - animated status indicator while processing */}
+                {/* Claude Code behavior: random verb stays for entire turn regardless of mode. */}
+                {/* Mode only affects animation (color, speed, glow). Tool names show in TurnCards. */}
                 {session.isProcessing && (() => {
-                  // Find the last user message timestamp for accurate elapsed time
                   const lastUserMsg = [...session.messages].reverse().find(m => m.role === 'user')
+                  const hasActiveTools = session.messages.some(m => m.role === 'tool' && m.toolStatus === 'executing')
+                  const lastAssistantMsg = [...session.messages].reverse().find(m => m.role === 'assistant')
+                  const responseLength = lastAssistantMsg?.content?.length ?? 0
                   return (
-                    <ProcessingIndicator
+                    <AgentSpinner
+                      // Key on last user message ID — forces remount (new random verb) per turn
+                      key={lastUserMsg?.id ?? 'spinner'}
+                      mode={session.agentState ?? 'requesting'}
                       startTime={lastUserMsg?.timestamp}
+                      responseLength={responseLength}
+                      hasActiveTools={hasActiveTools}
                       statusMessage={session.currentStatus?.message}
                     />
                   )
@@ -2307,14 +2317,11 @@ function MessageBubble({
     return <ErrorMessage message={message} onOpenUrl={onOpenUrl} />
   }
 
-  // === STATUS MESSAGE: Matches ProcessingIndicator layout for visual consistency ===
+  // === STATUS MESSAGE: Uses AgentSpinner style for visual consistency ===
   if (message.role === 'status') {
     return (
       <div className="flex items-center gap-2 px-3 py-1 -mb-1 text-[13px] text-muted-foreground">
-        {/* Spinner in same location as TurnCard chevron */}
-        <div className="w-3 h-3 flex items-center justify-center shrink-0">
-          <Spinner className="text-[10px]" />
-        </div>
+        <span className="w-3 h-3 flex items-center justify-center shrink-0 text-[11px] font-mono" style={{ color: 'rgb(153, 153, 153)' }}>✦</span>
         <span>{message.content}</span>
       </div>
     )

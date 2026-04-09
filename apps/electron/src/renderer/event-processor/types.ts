@@ -457,6 +457,16 @@ export interface SourceActivatedEvent {
 }
 
 /**
+ * Agent state event - streaming state for spinner animation
+ * Drives the glimmer/spinner animation modes in the UI
+ */
+export interface AgentStateEvent {
+  type: 'agent_state'
+  sessionId: string
+  state: 'requesting' | 'thinking' | 'responding' | 'tool_use'
+}
+
+/**
  * Usage update event - real-time context usage during processing
  * Allows UI to show growing context as agent processes, not just on complete
  */
@@ -514,6 +524,7 @@ export type AgentEvent =
   | AuthCompletedEvent
   | SourceActivatedEvent
   | UsageUpdateEvent
+  | AgentStateEvent
 
 /**
  * Side effects that need to be handled outside the pure processor

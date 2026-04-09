@@ -91,6 +91,7 @@ export {
 // UI primitives
 export {
   Spinner,
+  AgentSpinner,
   SimpleDropdown,
   SimpleDropdownItem,
   PreviewHeader,
@@ -114,6 +115,8 @@ export {
   IslandFollowUpContentView,
   useIslandNavigation,
   type SpinnerProps,
+  type AgentSpinnerProps,
+  type GlimmerMode,
   type SimpleDropdownProps,
   type SimpleDropdownItemProps,
   type PreviewHeaderProps,

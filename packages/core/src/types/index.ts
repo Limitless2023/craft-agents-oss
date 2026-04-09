@@ -46,6 +46,7 @@ export type {
   TypedError,
   PermissionRequest,
   AgentEvent,
+  AgentStreamState,
   // Auth-related types
   CredentialInputMode,
   AuthRequestType,

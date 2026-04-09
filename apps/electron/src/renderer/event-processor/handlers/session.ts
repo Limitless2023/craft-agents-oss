@@ -39,6 +39,7 @@ import type {
   AuthRequestEvent,
   AuthCompletedEvent,
   UsageUpdateEvent,
+  AgentStateEvent,
   Effect,
 } from '../types'
 import type { Message } from '../../../shared/types'
@@ -88,6 +89,7 @@ export function handleComplete(
         messages: updatedMessages,
         isProcessing: false,
         currentStatus: undefined,  // Clear any lingering status
+        agentState: null,  // Clear agent streaming state
         // Update tokenUsage from complete event (for real-time context counter updates)
         tokenUsage: event.tokenUsage ?? session.tokenUsage,
         // Update hasUnread flag from main process (state machine for NEW badge)
@@ -130,6 +132,7 @@ export function handleError(
         messages: [...messagesWithFailedTools, errorMessage],
         isProcessing: false,
         currentStatus: undefined,  // Clear any lingering status
+        agentState: null,
       },
       streaming: null,
     },
@@ -181,6 +184,7 @@ export function handleTypedError(
         messages: [...messagesWithFailedTools, errorMessage],
         isProcessing: false,
         currentStatus: undefined,  // Clear any lingering status
+        agentState: null,
       },
       streaming: null,
     },
@@ -325,6 +329,7 @@ export function handleInterrupted(
         isProcessing: false,
         messages,
         currentStatus: undefined,  // Clear any lingering status
+        agentState: null,
       },
       streaming: null,
     },
@@ -914,3 +919,24 @@ export function handleUsageUpdate(
   }
 }
 
+/**
+ * Handle agent_state - update agent streaming state for spinner animation
+ * Stores the state on session so AgentSpinner can read it
+ */
+export function handleAgentState(
+  state: SessionState,
+  event: AgentStateEvent
+): ProcessResult {
+  const { session, streaming } = state
+
+  return {
+    state: {
+      session: {
+        ...session,
+        agentState: event.state,
+      },
+      streaming,
+    },
+    effects: [],
+  }
+}

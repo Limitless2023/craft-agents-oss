@@ -94,6 +94,7 @@ export class ClaudeEventAdapter extends BaseEventAdapter {
   private emittedToolStarts = new Set<string>();
   private activeParentTools = new Set<string>();
   private pendingText: string | null = null;
+  private emittedRespondingState = false;
 
   // Session-persistent state (survives across turns)
   private lastAssistantUsage: AssistantUsage | null = null;
@@ -117,6 +118,7 @@ export class ClaudeEventAdapter extends BaseEventAdapter {
     this.activeParentTools = new Set();
     this.pendingText = null;
     this.lastAssistantUsage = null;
+    this.emittedRespondingState = false;
   }
 
   // ============================================================
@@ -315,12 +317,14 @@ export class ClaudeEventAdapter extends BaseEventAdapter {
       );
     }
 
-    // Capture turn ID from message_start
+    // Capture turn ID from message_start and emit thinking state
     if (event.type === 'message_start') {
       const messageId = event.message?.id;
       if (messageId) {
         this.currentTurnId = messageId;
       }
+      this.emittedRespondingState = false;
+      events.push({ type: 'agent_state', state: 'thinking' });
     }
 
     // message_delta contains the actual stop_reason — emit pending text now
@@ -340,6 +344,11 @@ export class ClaudeEventAdapter extends BaseEventAdapter {
     }
 
     if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      // Emit 'responding' on first text delta of each turn
+      if (!this.emittedRespondingState) {
+        this.emittedRespondingState = true;
+        events.push({ type: 'agent_state', state: 'responding' });
+      }
       events.push({
         type: 'text_delta',
         text: event.delta.text,
@@ -347,6 +356,8 @@ export class ClaudeEventAdapter extends BaseEventAdapter {
         parentToolUseId: (message as any).parent_tool_use_id || undefined,
       });
     } else if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+      // Emit 'tool_use' state when a tool block begins
+      events.push({ type: 'agent_state', state: 'tool_use' });
       // Stream events arrive with empty input — the full input comes later
       const toolBlock = event.content_block;
       const sdkParentId = (message as any).parent_tool_use_id;

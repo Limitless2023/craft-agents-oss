@@ -3,6 +3,7 @@
  */
 
 export { Spinner, type SpinnerProps, LoadingIndicator, type LoadingIndicatorProps } from './LoadingIndicator'
+export { AgentSpinner, type AgentSpinnerProps, type GlimmerMode } from './AgentSpinner'
 export {
   SimpleDropdown,
   SimpleDropdownItem,

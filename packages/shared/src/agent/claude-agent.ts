@@ -1387,6 +1387,9 @@ This is a branched conversation. All prior messages in this conversation are par
       this.eventAdapter.updateSessionDir(metadataSessionDir);
       this.eventAdapter.startTurn();
 
+      // Signal UI that the request is being sent
+      yield { type: 'agent_state' as const, state: 'requesting' as const };
+
       // Process SDK messages and convert to AgentEvents
       const summarizeCallback = this.getSummarizeCallback();
       let receivedComplete = false;
