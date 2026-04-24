@@ -244,6 +244,10 @@ export interface ElectronAPI {
   removeWorkspace(workspaceId: string): Promise<boolean>
   invokeOnServer(url: string, token: string, channel: string, ...args: any[]): Promise<any>
 
+  // Remote session transfer (main-process orchestrated, supports chunked upload)
+  transferSessionToWorkspace(sessionId: string, targetWorkspaceId: string, sessionIndex?: number, sessionCount?: number): Promise<{ sessionId: string }>
+  onTransferProgress(callback: (progress: { sessionIndex: number; sessionCount: number; chunkSent: number; chunkTotal: number }) => void): () => void
+
   // Session export/import (cross-workspace transfer)
   exportSession(sessionId: string): Promise<unknown>
   importSession(targetWorkspaceId: string, bundle: unknown, mode: 'move' | 'fork'): Promise<{ sessionId: string; warnings?: string[] }>
@@ -251,7 +255,7 @@ export interface ElectronAPI {
   importRemoteSessionTransfer(targetWorkspaceId: string, payload: RemoteSessionTransferPayload): Promise<ImportRemoteSessionTransferResult>
 
   // Pending plan execution (for reload recovery)
-  getPendingPlanExecution(sessionId: string): Promise<{ planPath: string; draftInputSnapshot?: string; awaitingCompaction: boolean } | null>
+  getPendingPlanExecution(sessionId: string): Promise<{ planPath: string; draftInputSnapshot?: string; awaitingCompaction: boolean; executionDispatched: boolean } | null>
   // Permission mode reconciliation
   getSessionPermissionModeState(sessionId: string): Promise<PermissionModeState | null>
 
@@ -646,7 +650,48 @@ export interface ElectronAPI {
   // Resources (cross-workspace export/import)
   exportResources(workspaceId: string, options: ExportResourcesOptions): Promise<ExportResult>
   importResources(workspaceId: string, bundle: ResourceBundle, mode: ResourceImportMode): Promise<ResourceImportResult>
+
+  // Messaging gateway — workspaceId is taken from the client handshake (ctx.workspaceId)
+  getMessagingConfig(): Promise<{
+    enabled: boolean
+    platforms: Record<string, { enabled: boolean } | undefined>
+    runtime: Record<string, MessagingPlatformRuntimeInfo | undefined>
+  } | null>
+  updateMessagingConfig(config: Record<string, unknown>): Promise<void>
+  testTelegramToken(token: string): Promise<{ success: boolean; botName?: string; botUsername?: string; error?: string }>
+  saveTelegramToken(token: string): Promise<void>
+  disconnectMessagingPlatform(platform: string): Promise<void>
+  forgetMessagingPlatform(platform: string): Promise<void>
+  getMessagingBindings(): Promise<Array<{ id: string; workspaceId: string; sessionId: string; platform: string; channelId: string; channelName?: string; enabled: boolean; createdAt: number }>>
+  generateMessagingPairingCode(sessionId: string, platform: string): Promise<{ code: string; expiresAt: number; botUsername?: string }>
+  unbindMessagingSession(sessionId: string, platform?: string): Promise<void>
+  unbindMessagingBinding(bindingId: string): Promise<{ success: boolean }>
+  onMessagingBindingChanged(callback: (workspaceId: string) => void): () => void
+  onMessagingPlatformStatus(callback: (workspaceId: string, platform: string, status: MessagingPlatformRuntimeInfo) => void): () => void
+  // WhatsApp (subprocess-based Baileys adapter)
+  startWhatsAppConnect(): Promise<{ success: boolean }>
+  submitWhatsAppPhone(phoneNumber: string): Promise<{ success: boolean }>
+  onWhatsAppEvent(callback: (payload: { workspaceId: string; event: WhatsAppUiEvent }) => void): () => void
 }
+
+export interface MessagingPlatformRuntimeInfo {
+  platform: string
+  configured: boolean
+  connected: boolean
+  state: 'disconnected' | 'connecting' | 'connected' | 'reconnect_required' | 'error'
+  identity?: string
+  lastError?: string
+  updatedAt: number
+}
+
+/** Event payloads broadcast from the WhatsApp subprocess to the UI. */
+export type WhatsAppUiEvent =
+  | { type: 'qr'; qr: string }
+  | { type: 'pairing_code'; code: string }
+  | { type: 'connected'; jid?: string; name?: string }
+  | { type: 'disconnected'; loggedOut: boolean; reason?: string }
+  | { type: 'unavailable'; reason: string; message: string }
+  | { type: 'error'; message: string }
 
 // =============================================================================
 // Navigation types (renderer-only)

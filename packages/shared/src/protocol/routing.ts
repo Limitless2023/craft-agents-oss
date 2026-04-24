@@ -245,6 +245,12 @@ export const REMOTE_ELIGIBLE_CHANNELS = new Set<string>([
   RPC_CHANNELS.sessions.EXPORT_REMOTE_TRANSFER,
   RPC_CHANNELS.sessions.IMPORT_REMOTE_TRANSFER,
 
+  // transfer — chunked large-payload import (sessions, resources)
+  RPC_CHANNELS.transfer.START,
+  RPC_CHANNELS.transfer.CHUNK,
+  RPC_CHANNELS.transfer.COMMIT,
+  RPC_CHANNELS.transfer.ABORT,
+
   // tasks — workspace content
   RPC_CHANNELS.tasks.GET_OUTPUT,
 
@@ -391,6 +397,34 @@ export const REMOTE_ELIGIBLE_CHANNELS = new Set<string>([
   // resources — workspace resource export/import
   RPC_CHANNELS.resources.EXPORT,
   RPC_CHANNELS.resources.IMPORT,
+
+  // messaging — gateway channels run on workspace server
+  RPC_CHANNELS.messaging.WA_REGISTER,
+  RPC_CHANNELS.messaging.WA_INCOMING,
+  RPC_CHANNELS.messaging.WA_BUTTON_PRESS,
+  RPC_CHANNELS.messaging.WA_STATUS,
+  RPC_CHANNELS.messaging.WA_QR,
+  RPC_CHANNELS.messaging.WA_SEND,
+  RPC_CHANNELS.messaging.WA_SEND_BUTTONS,
+  RPC_CHANNELS.messaging.WA_SEND_TYPING,
+  RPC_CHANNELS.messaging.WA_SEND_FILE,
+  RPC_CHANNELS.messaging.WA_CONNECT,
+  RPC_CHANNELS.messaging.WA_DISCONNECT,
+  RPC_CHANNELS.messaging.BINDING_CHANGED,
+  RPC_CHANNELS.messaging.PLATFORM_STATUS,
+  RPC_CHANNELS.messaging.GET_CONFIG,
+  RPC_CHANNELS.messaging.UPDATE_CONFIG,
+  RPC_CHANNELS.messaging.TEST_TELEGRAM,
+  RPC_CHANNELS.messaging.SAVE_TELEGRAM,
+  RPC_CHANNELS.messaging.DISCONNECT,
+  RPC_CHANNELS.messaging.FORGET,
+  RPC_CHANNELS.messaging.GET_BINDINGS,
+  RPC_CHANNELS.messaging.GENERATE_CODE,
+  RPC_CHANNELS.messaging.UNBIND,
+  RPC_CHANNELS.messaging.UNBIND_BINDING,
+  RPC_CHANNELS.messaging.WA_START_CONNECT,
+  RPC_CHANNELS.messaging.WA_SUBMIT_PHONE,
+  RPC_CHANNELS.messaging.WA_UI_EVENT,
 ])
 
 // ---------------------------------------------------------------------------

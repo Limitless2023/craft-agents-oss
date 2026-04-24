@@ -4,9 +4,12 @@ import { RPC_CHANNELS, type FileAttachment, type SendMessageOptions, type Sessio
 import type { StoredAttachment } from '@craft-agent/core/types'
 import { getWorkspaceByNameOrId } from '@craft-agent/shared/config'
 import { perf } from '@craft-agent/shared/utils'
-import { isValidThinkingLevel } from '@craft-agent/shared/agent/thinking-levels'
+import { isValidThinkingLevel, THINKING_LEVEL_IDS } from '@craft-agent/shared/agent/thinking-levels'
+
+const VALID_THINKING_LEVELS_LIST = THINKING_LEVEL_IDS.map(id => `'${id}'`).join(', ')
 import { pushTyped, type RpcServer } from '@craft-agent/server-core/transport'
 import type { HandlerDeps } from '../handler-deps'
+import { setTransferableHandler } from './transfer'
 
 interface ClientSessionWatchState {
   watcher: import('fs').FSWatcher
@@ -255,7 +258,7 @@ export function registerSessionsHandlers(server: RpcServer, deps: HandlerDeps): 
       case 'setThinkingLevel':
         // Validate thinking level before passing to session manager
         if (!isValidThinkingLevel(command.level)) {
-          throw new Error(`Invalid thinking level: ${command.level}. Valid values: 'off', 'low', 'medium', 'high', 'max'`)
+          throw new Error(`Invalid thinking level: ${command.level}. Valid values: ${VALID_THINKING_LEVELS_LIST}`)
         }
         return sessionManager.setSessionThinkingLevel(sessionId, command.level)
       case 'updateWorkingDirectory':
@@ -294,6 +297,8 @@ export function registerSessionsHandlers(server: RpcServer, deps: HandlerDeps): 
         return sessionManager.setPendingPlanExecution(sessionId, command.planPath, command.draftInputSnapshot)
       case 'markCompactionComplete':
         return sessionManager.markCompactionComplete(sessionId)
+      case 'markPendingPlanExecutionDispatched':
+        return sessionManager.markPendingPlanExecutionDispatched(sessionId)
       case 'clearPendingPlanExecution':
         return sessionManager.clearPendingPlanExecution(sessionId)
       case 'addAnnotation':
@@ -474,13 +479,16 @@ export function registerSessionsHandlers(server: RpcServer, deps: HandlerDeps): 
   // Import a session bundle into a target workspace
   // targetWorkspaceId is passed explicitly (not from context) so the renderer
   // can import into any workspace the server manages, not just the active one.
-  server.handle(RPC_CHANNELS.sessions.IMPORT, async (_ctx, targetWorkspaceId: string, bundle: unknown, mode: string) => {
+  const importHandler = async (_ctx: any, targetWorkspaceId: string, bundle: unknown, mode: string) => {
     await sessionManager.waitForInit()
     if (!targetWorkspaceId || typeof targetWorkspaceId !== 'string') throw new Error('targetWorkspaceId is required')
     if (mode !== 'move' && mode !== 'fork') throw new Error(`Invalid dispatch mode: ${mode}`)
 
     return sessionManager.importSession(targetWorkspaceId, bundle as import('@craft-agent/shared/sessions').SessionBundle, mode)
-  })
+  }
+  server.handle(RPC_CHANNELS.sessions.IMPORT, importHandler)
+  // Also register as transferable so chunked transfer can invoke it on commit
+  setTransferableHandler(RPC_CHANNELS.sessions.IMPORT, importHandler)
 
   // Export a session as a summarized remote-transfer payload.
   server.handle(RPC_CHANNELS.sessions.EXPORT_REMOTE_TRANSFER, async (ctx, sessionId: string) => {
