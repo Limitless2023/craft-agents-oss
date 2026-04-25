@@ -3,8 +3,11 @@ set -e
 
 APP_ROOT="/Applications/Craft Agents.app/Contents"
 APP_DIST="$APP_ROOT/Resources/app/dist"
+APP_PACKAGE_JSON="$APP_ROOT/Resources/app/package.json"
 BUILD="/Users/limitless/Desktop/Projects/craft-agents-oss/apps/electron/dist"
+BUILD_PACKAGE_JSON="/Users/limitless/Desktop/Projects/craft-agents-oss/apps/electron/package.json"
 PLIST="$APP_ROOT/Info.plist"
+APP_VERSION="$(node -p "require('$BUILD_PACKAGE_JSON').version")"
 
 echo "=== Patching Craft Agents ==="
 
@@ -20,6 +23,16 @@ cp "$BUILD/bootstrap-preload.cjs" "$APP_DIST/bootstrap-preload.cjs"
 echo "Syncing renderer..."
 rsync -a --delete "$BUILD/renderer/" "$APP_DIST/renderer/"
 echo "Renderer synced"
+
+# --- Step 4: Sync app metadata/version ---
+echo "Syncing package.json..."
+cp "$BUILD_PACKAGE_JSON" "$APP_PACKAGE_JSON"
+
+echo "Setting app version to $APP_VERSION..."
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST" 2>/dev/null \
+  || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $APP_VERSION" "$PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_VERSION" "$PLIST" 2>/dev/null \
+  || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $APP_VERSION" "$PLIST"
 
 # --- Step 5: Add .md file association to Info.plist ---
 if ! /usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes" "$PLIST" &>/dev/null; then

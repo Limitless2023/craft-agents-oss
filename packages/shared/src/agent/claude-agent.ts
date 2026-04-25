@@ -647,6 +647,11 @@ export class ClaudeAgent extends BaseAgent {
       return { authInjected: false, authWarning: `Connection not found: ${slug}`, authWarningLevel: 'error' };
     }
 
+    // Backup current OAuth token before clearing — restored if refresh fails transiently
+    // (e.g. proxy not available in main process, token within 5-min expiry buffer).
+    // The subprocess can still use the previously valid token from reinitializeAuth().
+    const backupOAuthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+
     // Clear all auth env vars first for clean state.
     // Claude subprocesses must never inherit Bedrock-routing toggles from a
     // previous connection or parent process environment.
@@ -660,7 +665,13 @@ export class ClaudeAgent extends BaseAgent {
     const result = await resolveAuthEnvVars(connection, slug, manager, getValidClaudeOAuthToken);
 
     if (!result.success) {
-      return { authInjected: false, authWarning: result.warning, authWarningLevel: 'error' };
+      // Restore backup so the subprocess can still authenticate via the previously valid token.
+      // Downgrade to 'warning' because the session typically continues to work via the
+      // subprocess's own credential store (~/.claude/), making this a soft/transient failure.
+      if (backupOAuthToken) {
+        process.env.CLAUDE_CODE_OAUTH_TOKEN = backupOAuthToken;
+      }
+      return { authInjected: false, authWarning: result.warning, authWarningLevel: 'warning' };
     }
 
     // Apply env vars to process.env (for SDK subprocess) and envOverrides (per-session isolation)

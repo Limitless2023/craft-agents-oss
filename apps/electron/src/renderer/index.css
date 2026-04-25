@@ -1371,15 +1371,3 @@ html.dark[data-scenic] .fullscreen-overlay-background {
   min-height: 31px;
   padding: 6px 8px;
 }
-
-/* =============================================================================
-   AGENT SPINNER — Glimmer text effect (ported from Claude Code)
-   Uses background-clip: text to make gradient visible through text only.
-   Must be a CSS class — inline style `backgroundClip: 'text'` is unreliable.
-============================================================================= */
-.agent-glimmer-text {
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-  color: transparent !important;
-}
