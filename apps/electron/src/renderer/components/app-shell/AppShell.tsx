@@ -32,6 +32,7 @@ import {
   Bot,
   Info,
   BookOpen,
+  MailOpen,
 } from "lucide-react"
 // SessionStatusIcons no longer used - icons come from dynamic sessionStatuses
 import { SourceAvatar } from "@/components/ui/source-avatar"
@@ -2900,6 +2901,11 @@ function AppShellContent({
                                       <Inbox className="h-3.5 w-3.5" />
                                       <span className="flex-1">{t("sidebar.groupByStatus")}</span>
                                       {chatGroupingMode === 'status' && <Check className="h-3 w-3 text-muted-foreground" />}
+                                    </StyledDropdownMenuItem>
+                                    <StyledDropdownMenuItem onClick={() => setChatGroupingMode('unread')}>
+                                      <MailOpen className="h-3.5 w-3.5" />
+                                      <span className="flex-1">{t("sidebar.groupByUnread")}</span>
+                                      {chatGroupingMode === 'unread' && <Check className="h-3 w-3 text-muted-foreground" />}
                                     </StyledDropdownMenuItem>
                                   </StyledDropdownMenuSubContent>
                                 </DropdownMenuSub>
