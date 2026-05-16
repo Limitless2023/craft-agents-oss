@@ -1327,6 +1327,7 @@
   "toast.failedToSaveSetting": "{{setting}} konnte nicht gespeichert werden",
   "toast.failedToShare": "Teilen fehlgeschlagen",
   "toast.failedToToggleAutomation": "Automatisierung konnte nicht umgeschaltet werden",
+  "toast.fileNotFoundOpenedParent": "Datei nicht gefunden — übergeordneter Ordner geöffnet",
   "toast.installingUpdate": "Update wird installiert...",
   "toast.invalidLink": "Ungültiger Link",
   "toast.invalidLinkDesc": "Der Inhalt wurde möglicherweise verschoben oder gelöscht.",

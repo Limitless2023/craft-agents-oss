@@ -1327,6 +1327,7 @@
   "toast.failedToSaveSetting": "无法保存 {{setting}}",
   "toast.failedToShare": "无法共享",
   "toast.failedToToggleAutomation": "无法切换自动化",
+  "toast.fileNotFoundOpenedParent": "文件不存在 — 已打开上级文件夹",
   "toast.installingUpdate": "正在安装更新...",
   "toast.invalidLink": "无效链接",
   "toast.invalidLinkDesc": "内容可能已被移动或删除。",

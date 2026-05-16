@@ -1327,6 +1327,7 @@
   "toast.failedToSaveSetting": "Nem sikerült menteni: {{setting}}",
   "toast.failedToShare": "Nem sikerült megosztani",
   "toast.failedToToggleAutomation": "Nem sikerült váltani az automatizáción",
+  "toast.fileNotFoundOpenedParent": "A fájl nem található — szülőmappa megnyitva",
   "toast.installingUpdate": "Frissítés telepítése...",
   "toast.invalidLink": "Érvénytelen hivatkozás",
   "toast.invalidLinkDesc": "A tartalom esetleg át lett helyezve vagy törölve lett.",

@@ -1327,6 +1327,7 @@
   "toast.failedToSaveSetting": "Failed to save {{setting}}",
   "toast.failedToShare": "Failed to share",
   "toast.failedToToggleAutomation": "Failed to toggle automation",
+  "toast.fileNotFoundOpenedParent": "File not found — opened parent folder",
   "toast.installingUpdate": "Installing update...",
   "toast.invalidLink": "Invalid link",
   "toast.invalidLinkDesc": "The content may have been moved or deleted.",

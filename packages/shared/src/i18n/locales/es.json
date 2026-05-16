@@ -1327,6 +1327,7 @@
   "toast.failedToSaveSetting": "No se pudo guardar {{setting}}",
   "toast.failedToShare": "No se pudo compartir",
   "toast.failedToToggleAutomation": "No se pudo activar/desactivar la automatización",
+  "toast.fileNotFoundOpenedParent": "Archivo no encontrado — se abrió la carpeta principal",
   "toast.installingUpdate": "Instalando actualización...",
   "toast.invalidLink": "Enlace no válido",
   "toast.invalidLinkDesc": "El contenido puede haber sido movido o eliminado.",

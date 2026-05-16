@@ -81,6 +81,26 @@ const EXTERNAL_EXTENSIONS = new Set([
 ])
 
 /**
+ * Archive/installer files — clicking these almost always means "I want to
+ * locate this file" (e.g. to upload, share, or install), not "extract/install
+ * right now". Route them through `shell.showItemInFolder` so Finder opens
+ * with the file pre-selected instead of triggering Archive Utility /
+ * Installer.app.
+ */
+const REVEAL_IN_FINDER_EXTENSIONS = new Set([
+  'zip', 'tar', 'gz', 'rar', '7z',
+  'dmg', 'pkg', 'exe', 'msi',
+])
+
+/**
+ * Whether clicking this path should reveal it in Finder/Explorer instead of
+ * launching the default opener. Used by link-interceptor routing.
+ */
+export function shouldRevealInFinder(filePath: string): boolean {
+  return REVEAL_IN_FINDER_EXTENSIONS.has(getExtension(filePath))
+}
+
+/**
  * Extract the file extension from a path, lowercased.
  * Handles compound extensions like .env.local by returning the last segment.
  */

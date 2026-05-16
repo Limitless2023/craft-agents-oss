@@ -1327,6 +1327,7 @@
   "toast.failedToSaveSetting": "Nie udało się zapisać ustawienia {{setting}}",
   "toast.failedToShare": "Nie udało się udostępnić",
   "toast.failedToToggleAutomation": "Nie udało się przełączyć automatyzacji",
+  "toast.fileNotFoundOpenedParent": "Nie znaleziono pliku — otwarto folder nadrzędny",
   "toast.installingUpdate": "Instalowanie aktualizacji...",
   "toast.invalidLink": "Nieprawidłowe łącze",
   "toast.invalidLinkDesc": "Treść mogła zostać przeniesiona lub usunięta.",

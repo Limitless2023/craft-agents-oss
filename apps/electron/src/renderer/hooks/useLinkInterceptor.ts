@@ -15,7 +15,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { classifyFile, type FilePreviewType } from '@craft-agent/ui'
+import { classifyFile, shouldRevealInFinder, type FilePreviewType } from '@craft-agent/ui'
 import { getLanguageFromPath } from '@/lib/file-utils'
 
 // ── Preview state types ────────────────────────────────────────────────────────
@@ -169,7 +169,17 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
     const classification = classifyFile(resolvedPath)
 
     if (!classification.canPreview || !classification.type) {
-      // No preview available — open in default external app
+      // ┌─────────────────────────────────────────────────────────────────┐
+      // │ Archives / installers (.zip, .dmg, .pkg, etc.) — reveal in     │
+      // │ Finder rather than launching Archive Utility / Installer.app.  │
+      // │ Matches the typical "find this file to upload/share" intent.   │
+      // └─────────────────────────────────────────────────────────────────┘
+      if (shouldRevealInFinder(resolvedPath)) {
+        optionsRef.current.showInFolder(resolvedPath)
+        return
+      }
+      // Folder or other unrecognized file — open in default external app
+      // (shell.openPath on a directory opens it in Finder/Explorer)
       optionsRef.current.openFileExternal(resolvedPath)
       return
     }

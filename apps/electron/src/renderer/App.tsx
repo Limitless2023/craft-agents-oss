@@ -1617,6 +1617,25 @@ export default function App() {
       : undefined
   }, [sessionSelection.selected, sessionMetaMap])
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ When opening/revealing a path fails (typically because the path     │
+  // │ does not exist on disk), walk up the path components and try to     │
+  // │ reveal the nearest existing ancestor in Finder/Explorer. Surfaces a │
+  // │ helpful "Not found — opened parent" toast rather than a bare error. │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const tryRevealParentFallback = useCallback(async (path: string): Promise<boolean> => {
+    const normalized = path.replace(/\/+$/, '')
+    const lastSlash = normalized.lastIndexOf('/')
+    if (lastSlash <= 0) return false
+    const parent = normalized.slice(0, lastSlash)
+    try {
+      await window.electronAPI.openFile(parent)
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
   // Centralized link interceptor: classifies file types and decides whether to
   // show an in-app preview overlay or open externally. Replaces the old
   // handleOpenFile/handleOpenUrl that always opened in external apps.
@@ -1628,9 +1647,16 @@ export default function App() {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
         console.error('Failed to open file:', error)
-        toast.error(t('toast.failedToOpenFile'), {
-          description: message,
-        })
+        const revealed = await tryRevealParentFallback(path)
+        if (revealed) {
+          toast.info(t('toast.fileNotFoundOpenedParent'), {
+            description: path,
+          })
+        } else {
+          toast.error(t('toast.failedToOpenFile'), {
+            description: message,
+          })
+        }
       }
     },
     openUrl: async (url) => {
@@ -1650,9 +1676,16 @@ export default function App() {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
         console.error('Failed to show in folder:', error)
-        toast.error(t("toast.failedToReveal", { fileManager: getFileManagerName() }), {
-          description: message,
-        })
+        const revealed = await tryRevealParentFallback(path)
+        if (revealed) {
+          toast.info(t('toast.fileNotFoundOpenedParent'), {
+            description: path,
+          })
+        } else {
+          toast.error(t("toast.failedToReveal", { fileManager: getFileManagerName() }), {
+            description: message,
+          })
+        }
       }
     },
     readFile: (path) => window.electronAPI.readFile(path),

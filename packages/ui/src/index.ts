@@ -229,6 +229,7 @@ export {
 // File classification (for link interceptor)
 export {
   classifyFile,
+  shouldRevealInFinder,
   type FilePreviewType,
   type FileClassification,
 } from './lib/file-classification'

@@ -1327,6 +1327,7 @@
   "toast.failedToSaveSetting": "{{setting}}の保存に失敗しました",
   "toast.failedToShare": "共有に失敗しました",
   "toast.failedToToggleAutomation": "オートメーションの切り替えに失敗しました",
+  "toast.fileNotFoundOpenedParent": "ファイルが見つかりません — 親フォルダを開きました",
   "toast.installingUpdate": "アップデートをインストール中...",
   "toast.invalidLink": "無効なリンク",
   "toast.invalidLinkDesc": "コンテンツが移動または削除された可能性があります。",
