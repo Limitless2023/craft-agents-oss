@@ -1604,10 +1604,24 @@ export default function App() {
     }
   }, [])
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Active session working directory — used to resolve relative file    │
+  // │ paths clicked from AI tables (e.g. `swiss-layout-lock.md`).         │
+  // │ Stored in a ref so the link-interceptor callback stays stable.      │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const sessionMetaMap = useAtomValue(sessionMetaMapAtom)
+  const activeSessionWorkingDirectoryRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    activeSessionWorkingDirectoryRef.current = sessionSelection.selected
+      ? sessionMetaMap.get(sessionSelection.selected)?.workingDirectory
+      : undefined
+  }, [sessionSelection.selected, sessionMetaMap])
+
   // Centralized link interceptor: classifies file types and decides whether to
   // show an in-app preview overlay or open externally. Replaces the old
   // handleOpenFile/handleOpenUrl that always opened in external apps.
   const linkInterceptor = useLinkInterceptor({
+    getWorkingDirectory: () => activeSessionWorkingDirectoryRef.current,
     openFileExternal: async (path) => {
       try {
         await window.electronAPI.openFile(path)

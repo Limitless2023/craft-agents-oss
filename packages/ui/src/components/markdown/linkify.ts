@@ -134,6 +134,28 @@ export function detectLinks(text: string): DetectedLink[] {
     let matchUrl = match.url
     let matchEnd = match.lastIndex
 
+    // ┌───────────────────────────────────────────────────────────────────┐
+    // │ Reclassify fuzzy hostname matches that look like local files.     │
+    // │                                                                   │
+    // │ linkify-it auto-promotes bare tokens like `swiss-layout-lock.md`  │
+    // │ to `http://swiss-layout-lock.md` because `.md` is a real TLD      │
+    // │ (Moldova). In an AI-chat context these are almost always file     │
+    // │ references. We treat them as file links here (rather than relying │
+    // │ on FILE_PATH_REGEX) because linkify-it's tokenizer handles edge   │
+    // │ cases the strict file regex misses — bold `**name.md**`, quoted   │
+    // │ `"name.md"`, italics `*name.md*`, etc.                            │
+    // └───────────────────────────────────────────────────────────────────┘
+    if (match.schema === '' && FILE_PATH_TARGET_REGEX.test(matchText)) {
+      links.push({
+        type: 'file',
+        text: matchText,
+        url: matchText, // bare relative path — resolved against cwd at click time
+        start: match.index,
+        end: matchEnd
+      })
+      continue
+    }
+
     const stripped = matchText.replace(trailingMarkdownRe, '')
     if (stripped !== matchText) {
       const diff = matchText.length - stripped.length

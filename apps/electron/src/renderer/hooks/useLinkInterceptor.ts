@@ -86,6 +86,12 @@ interface LinkInterceptorOptions {
   readFileDataUrl: (path: string) => Promise<string>
   /** Read file as binary (Uint8Array) for PDF previews via react-pdf */
   readFileBinary: (path: string) => Promise<Uint8Array>
+  /**
+   * Optional getter for the active session's working directory.
+   * Used to resolve relative file paths (e.g. bare filenames from AI tables
+   * like `swiss-layout-lock.md`) against the right cwd at click time.
+   */
+  getWorkingDirectory?: () => string | undefined
 }
 
 // ── Hook return type ───────────────────────────────────────────────────────────
@@ -138,11 +144,33 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
    * (e.g., @uiw/react-json-view crashes on null value).
    */
   const handleOpenFile = useCallback(async (path: string) => {
-    const classification = classifyFile(path)
+    // ┌───────────────────────────────────────────────────────────────────┐
+    // │ Resolve relative paths against active session's working directory │
+    // │                                                                   │
+    // │ Bare filenames from AI tables (e.g. `swiss-layout-lock.md`) have  │
+    // │ no directory context. Without resolving, fs.readFile would fail   │
+    // │ or fall back to process.cwd(). Absolute paths and ~/ stay as-is.  │
+    // └───────────────────────────────────────────────────────────────────┘
+    let resolvedPath = path
+    if (
+      !path.startsWith('/') &&
+      !path.startsWith('~/') &&
+      !path.startsWith('file:')
+    ) {
+      const cwd = optionsRef.current.getWorkingDirectory?.()
+      if (cwd) {
+        const sep = cwd.endsWith('/') ? '' : '/'
+        // Strip a leading "./" to keep paths tidy
+        const relative = path.replace(/^\.\//, '')
+        resolvedPath = `${cwd}${sep}${relative}`
+      }
+    }
+
+    const classification = classifyFile(resolvedPath)
 
     if (!classification.canPreview || !classification.type) {
       // No preview available — open in default external app
-      optionsRef.current.openFileExternal(path)
+      optionsRef.current.openFileExternal(resolvedPath)
       return
     }
 
@@ -150,25 +178,25 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
 
     // PDF: open with system default app (e.g. Preview.app) instead of in-app overlay
     if (type === 'pdf') {
-      optionsRef.current.openFileExternal(path)
+      optionsRef.current.openFileExternal(resolvedPath)
       return
     }
 
     // Images: show in-app preview overlay
     if (type === 'image') {
-      setPreviewState({ type, filePath: path })
+      setPreviewState({ type, filePath: resolvedPath })
       return
     }
 
     // For text-based files: read content first, then show overlay with content ready.
     // Local filesystem reads are near-instant — no loading state needed.
     try {
-      const content = await optionsRef.current.readFile(path)
-      const state = buildInitialTextState(type, path)
+      const content = await optionsRef.current.readFile(resolvedPath)
+      const state = buildInitialTextState(type, resolvedPath)
       setPreviewState({ ...state, content } as FilePreviewState)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to read file'
-      const state = buildInitialTextState(type, path)
+      const state = buildInitialTextState(type, resolvedPath)
       setPreviewState({ ...state, content: '', error: errorMsg } as FilePreviewState)
     }
   }, []) // Stable: uses optionsRef

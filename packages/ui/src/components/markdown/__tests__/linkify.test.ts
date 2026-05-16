@@ -62,6 +62,26 @@ describe('preprocessLinks', () => {
       expect(preprocessLinks(input)).toBe('Check out [example.com](http://example.com) for details')
     })
 
+    // ┌─────────────────────────────────────────────────────────────────┐
+    // │ Regression: bare filename with .md/.html/etc extension          │
+    // │ Previously, `.md` (Moldova TLD) caused linkify-it to promote    │
+    // │ `swiss-layout-lock.md` to `http://swiss-layout-lock.md`.        │
+    // └─────────────────────────────────────────────────────────────────┘
+    it('wraps a bare markdown filename as a file link, not an http URL', () => {
+      const input = 'See swiss-layout-lock.md for details'
+      expect(preprocessLinks(input)).toBe('See [swiss-layout-lock.md](swiss-layout-lock.md) for details')
+    })
+
+    it('wraps a bare html filename as a file link, not an http URL', () => {
+      const input = 'Open template-swiss.html in the browser'
+      expect(preprocessLinks(input)).toBe('Open [template-swiss.html](template-swiss.html) in the browser')
+    })
+
+    it('still wraps a real bare domain with a non-file TLD', () => {
+      const input = 'Visit example.com today'
+      expect(preprocessLinks(input)).toBe('Visit [example.com](http://example.com) today')
+    })
+
     it('wraps bare URL but preserves adjacent markdown link', () => {
       const input = 'See https://bare.example.com and [linked.example.com - Title](https://linked.example.com/page)'
       const result = preprocessLinks(input)
