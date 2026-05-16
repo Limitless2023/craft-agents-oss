@@ -204,10 +204,15 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
       const content = await optionsRef.current.readFile(resolvedPath)
       const state = buildInitialTextState(type, resolvedPath)
       setPreviewState({ ...state, content } as FilePreviewState)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to read file'
-      const state = buildInitialTextState(type, resolvedPath)
-      setPreviewState({ ...state, content: '', error: errorMsg } as FilePreviewState)
+    } catch {
+      // ┌─────────────────────────────────────────────────────────────────┐
+      // │ readFile failed — almost always ENOENT (agent claimed to write │
+      // │ a file that doesn't exist, OR session cwd doesn't match the    │
+      // │ agent's actual sub-cwd). Don't show an empty preview overlay.  │
+      // │ Hand off to openFileExternal so the parent-folder fallback in  │
+      // │ App.tsx can reveal the nearest existing ancestor in Finder.    │
+      // └─────────────────────────────────────────────────────────────────┘
+      optionsRef.current.openFileExternal(resolvedPath)
     }
   }, []) // Stable: uses optionsRef
 

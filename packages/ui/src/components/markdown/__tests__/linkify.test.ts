@@ -134,6 +134,28 @@ describe('preprocessLinks', () => {
       expect(preprocessLinks(input)).toBe(input)
     })
 
+    // ┌─────────────────────────────────────────────────────────────────┐
+    // │ Backticked URLs (with explicit scheme) should also be clickable │
+    // │ while preserving the monospace styling.                         │
+    // └─────────────────────────────────────────────────────────────────┘
+    it('wraps a backticked http URL', () => {
+      const input = '`http://localhost:5181`'
+      expect(preprocessLinks(input)).toBe('[`http://localhost:5181`](http://localhost:5181)')
+    })
+
+    it('wraps a backticked https URL with path', () => {
+      const input = 'See `https://api.example.com/v1/users` for the API'
+      expect(preprocessLinks(input)).toBe('See [`https://api.example.com/v1/users`](https://api.example.com/v1/users) for the API')
+    })
+
+    it('does NOT wrap a backticked bare hostname (no scheme — file-like)', () => {
+      // Bare hostnames in backticks are ambiguous; default to NOT wrapping
+      // them as URLs. If they happen to also be valid file names with a known
+      // extension, the file path branch handles them.
+      const input = '`example.com`'
+      expect(preprocessLinks(input)).toBe(input)
+    })
+
     it('wraps bare URL but preserves adjacent markdown link', () => {
       const input = 'See https://bare.example.com and [linked.example.com - Title](https://linked.example.com/page)'
       const result = preprocessLinks(input)

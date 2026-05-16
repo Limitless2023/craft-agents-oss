@@ -254,18 +254,23 @@ function stripPlaceholderLinks(text: string): string {
 }
 
 // ╔════════════════════════════════════════════════════════════════════════╗
-// ║ Inline-code file linkification                                         ║
+// ║ Inline-code linkification (file paths AND explicit URLs)               ║
 // ║                                                                        ║
-// ║ AI agents commonly wrap filenames in backticks (`SKILL.md`,            ║
-// ║ `assets/template.html`). Default markdown rendering keeps those as     ║
+// ║ AI agents commonly wrap references in backticks: filenames             ║
+// ║ (`SKILL.md`, `assets/template.html`) and URLs                          ║
+// ║ (`http://localhost:5181`). Default markdown rendering keeps those as   ║
 // ║ inert monospace text. We wrap them as markdown links while preserving  ║
 // ║ the inline-code styling so users see green underlined *monospace* —    ║
-// ║ both the "this is a filename" visual cue and clickability.             ║
+// ║ both the visual cue and clickability.                                  ║
 // ║                                                                        ║
 // ║ Heuristic must NOT linkify method/property patterns like               ║
 // ║ `console.log`, `res.json`, `process.env`. The AMBIGUOUS set below      ║
 // ║ contains extensions whose tokens are commonly method names; for those, ║
 // ║ a directory component (a `/`) is required.                             ║
+// ║                                                                        ║
+// ║ For URLs inside backticks we require an explicit scheme                ║
+// ║ (http://, https://, file://, etc.) to avoid the fuzzy-hostname         ║
+// ║ false-positive that bit us with bare `.md` filenames.                  ║
 // ╚════════════════════════════════════════════════════════════════════════╝
 
 /** Extensions that double as common method/property names — require a `/` to count as a file. */
@@ -280,18 +285,33 @@ function looksLikeFileReference(content: string): boolean {
 }
 
 /**
- * Wrap backtick-enclosed file references as clickable markdown links while
- * preserving the inline-code styling.
+ * If `content` is exactly a URL with an explicit scheme, return its
+ * normalized form. Otherwise return null. Restricts to schemed URLs so
+ * bare hostnames (e.g. `example.md`) don't get mis-promoted.
+ */
+function asSchemedUrl(content: string): string | null {
+  const matches = linkify.match(content) || []
+  const full = matches.find(m =>
+    m.index === 0 && m.lastIndex === content.length && !!m.schema
+  )
+  return full ? full.url : null
+}
+
+/**
+ * Wrap backtick-enclosed file references and URLs as clickable markdown links
+ * while preserving the inline-code styling.
  *
  *   `SKILL.md`                          → [`SKILL.md`](SKILL.md)
  *   `assets/template-enterprise.html`   → [`assets/template-enterprise.html`](assets/template-enterprise.html)
+ *   `http://localhost:5181`             → [`http://localhost:5181`](http://localhost:5181)
  *
  * Skipped:
- *   - Content inside fenced code blocks (real code, not file references)
+ *   - Content inside fenced code blocks (real code, not references)
  *   - Content already inside a markdown link (avoid double-wrapping)
  *   - Method/property patterns (`console.log`, `res.json`) via looksLikeFileReference
+ *   - Bare hostnames without a scheme inside backticks (false-positive prone)
  */
-function linkifyInlineCodeFilePaths(text: string): string {
+function linkifyInlineCodeReferences(text: string): string {
   // Quick check — no backticks, nothing to do
   if (!text.includes('`')) return text
 
@@ -305,11 +325,19 @@ function linkifyInlineCodeFilePaths(text: string): string {
       if (markdownLinkRanges.some(r => offset >= r.start && offset < r.end)) return fullMatch
 
       const trimmed = content.trim()
-      if (!looksLikeFileReference(trimmed)) return fullMatch
 
-      // Keep the original backticks inside the link text — markdown will
-      // render them as <code> inside <a>, giving us monospace + clickable.
-      return `[${fullMatch}](${trimmed})`
+      // 1) Explicit-scheme URL → use linkify-it's normalized form for href
+      const url = asSchemedUrl(trimmed)
+      if (url) {
+        return `[${fullMatch}](${url})`
+      }
+
+      // 2) File reference (excluding method-call patterns)
+      if (looksLikeFileReference(trimmed)) {
+        return `[${fullMatch}](${trimmed})`
+      }
+
+      return fullMatch
     }
   )
 }
@@ -358,10 +386,10 @@ export function preprocessLinks(text: string): string {
   // (e.g., AI-generated `[commit](https://github.com/...)` → `\`commit\``)
   text = stripPlaceholderLinks(text)
 
-  // Third pass: wrap backtick-enclosed file references as links.
+  // Third pass: wrap backtick-enclosed references (file paths + URLs) as links.
   // Runs BEFORE detectLinks so the resulting markdown links are picked up
   // as "already linked" ranges by findMarkdownLinkRanges below.
-  text = linkifyInlineCodeFilePaths(text)
+  text = linkifyInlineCodeReferences(text)
 
   // Quick check - if no potential links, return early
   if (!linkify.pretest(text) && !FILE_PATH_PRETEST_REGEX.test(text)) {
