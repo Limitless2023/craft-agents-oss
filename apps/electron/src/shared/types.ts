@@ -558,6 +558,12 @@ export interface ElectronAPI {
   getEnable1MContext(): Promise<boolean>
   setEnable1MContext(enabled: boolean): Promise<void>
 
+  // RTK token optimization
+  getRtkEnabled(): Promise<boolean>
+  setRtkEnabled(enabled: boolean): Promise<void>
+  getRtkStatus(opts?: { forceRecheck?: boolean }): Promise<{ installed: boolean; path: string | null; version: string | null }>
+  getRtkGain(): Promise<{ totalCommands: number; totalInput: number; totalOutput: number; totalSaved: number; avgSavingsPct: number; totalTimeMs: number; avgTimeMs: number } | null>
+
   // Network proxy settings
   getNetworkProxySettings(): Promise<NetworkProxySettings | undefined>
   setNetworkProxySettings(settings: NetworkProxySettings): Promise<void>
@@ -820,10 +826,14 @@ export interface SourcesNavigationState {
 
 /**
  * Settings navigation state
+ *
+ * `subpage: null` means the bare `settings` route — navigator-only view in compact
+ * mode. On desktop, the content panel falls back to the App page so it isn't empty.
+ * Sources/Skills/Automations use `details: null` for the same purpose.
  */
 export interface SettingsNavigationState {
   navigator: 'settings'
-  subpage: SettingsSubpage
+  subpage: SettingsSubpage | null
   rightSidebar?: RightSidebarPanel
 }
 
@@ -902,6 +912,7 @@ export const getNavigationStateKey = (state: NavigationState): string => {
     return 'automations'
   }
   if (state.navigator === 'settings') {
+    if (state.subpage === null) return 'settings'
     return `settings:${state.subpage}`
   }
   // Chats
@@ -949,7 +960,7 @@ export const parseNavigationStateKey = (key: string): NavigationState | null => 
   }
 
   // Handle settings
-  if (key === 'settings') return { navigator: 'settings', subpage: 'app' }
+  if (key === 'settings') return { navigator: 'settings', subpage: null }
   if (key.startsWith('settings:')) {
     const subpage = key.slice(9)
     if (isValidSettingsSubpage(subpage)) {
