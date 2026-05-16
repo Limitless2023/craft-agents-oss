@@ -73,6 +73,13 @@ export type FilePreviewState =
 // ── Hook options ───────────────────────────────────────────────────────────────
 // Callbacks injected by App.tsx so the hook doesn't depend on window.electronAPI directly.
 
+/** Subset of FileSearchResult used by the fuzzy resolver. */
+interface SearchResult {
+  path: string
+  type: 'file' | 'directory'
+  relativePath: string
+}
+
 interface LinkInterceptorOptions {
   /** Open file in default external application (e.g., VS Code) */
   openFileExternal: (path: string) => Promise<void>
@@ -92,6 +99,12 @@ interface LinkInterceptorOptions {
    * like `swiss-layout-lock.md`) against the right cwd at click time.
    */
   getWorkingDirectory?: () => string | undefined
+  /**
+   * Optional fuzzy file search. When the initial relative-path resolution
+   * misses (e.g. the agent works inside a sub-cwd that the session doesn't
+   * track), we BFS the cwd subtree for the file. Wire to `fs:search` IPC.
+   */
+  searchFiles?: (basePath: string, query: string) => Promise<SearchResult[]>
 }
 
 // ── Hook return type ───────────────────────────────────────────────────────────
@@ -151,19 +164,16 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
     // │ no directory context. Without resolving, fs.readFile would fail   │
     // │ or fall back to process.cwd(). Absolute paths and ~/ stay as-is.  │
     // └───────────────────────────────────────────────────────────────────┘
-    let resolvedPath = path
-    if (
+    const isRelative =
       !path.startsWith('/') &&
       !path.startsWith('~/') &&
       !path.startsWith('file:')
-    ) {
-      const cwd = optionsRef.current.getWorkingDirectory?.()
-      if (cwd) {
-        const sep = cwd.endsWith('/') ? '' : '/'
-        // Strip a leading "./" to keep paths tidy
-        const relative = path.replace(/^\.\//, '')
-        resolvedPath = `${cwd}${sep}${relative}`
-      }
+    const cwd = optionsRef.current.getWorkingDirectory?.()
+    const requestedRelative = path.replace(/^\.\//, '')
+    let resolvedPath = path
+    if (isRelative && cwd) {
+      const sep = cwd.endsWith('/') ? '' : '/'
+      resolvedPath = `${cwd}${sep}${requestedRelative}`
     }
 
     const classification = classifyFile(resolvedPath)
@@ -204,16 +214,38 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
       const content = await optionsRef.current.readFile(resolvedPath)
       const state = buildInitialTextState(type, resolvedPath)
       setPreviewState({ ...state, content } as FilePreviewState)
+      return
     } catch {
-      // ┌─────────────────────────────────────────────────────────────────┐
-      // │ readFile failed — almost always ENOENT (agent claimed to write │
-      // │ a file that doesn't exist, OR session cwd doesn't match the    │
-      // │ agent's actual sub-cwd). Don't show an empty preview overlay.  │
-      // │ Hand off to openFileExternal so the parent-folder fallback in  │
-      // │ App.tsx can reveal the nearest existing ancestor in Finder.    │
-      // └─────────────────────────────────────────────────────────────────┘
-      optionsRef.current.openFileExternal(resolvedPath)
+      // Fall through to fuzzy resolution below
     }
+
+    // ┌───────────────────────────────────────────────────────────────────┐
+    // │ Fuzzy fallback — agent often works inside a sub-cwd that the      │
+    // │ session doesn't track (e.g. cwd is .../ppt-skills/ but agent      │
+    // │ operates in .../ppt-skills/guizang-ppt-skill-remix/). BFS the cwd │
+    // │ subtree for the requested relative path and retry if we find one. │
+    // └───────────────────────────────────────────────────────────────────┘
+    const fuzzy = isRelative && cwd
+      ? await fuzzyResolvePath(optionsRef.current.searchFiles, cwd, requestedRelative)
+      : null
+
+    if (fuzzy) {
+      try {
+        const content = await optionsRef.current.readFile(fuzzy)
+        const state = buildInitialTextState(type, fuzzy)
+        setPreviewState({ ...state, content } as FilePreviewState)
+        return
+      } catch {
+        // Even the fuzzy match couldn't be read — fall through.
+      }
+    }
+
+    // ┌─────────────────────────────────────────────────────────────────┐
+    // │ Last resort — file genuinely missing. Hand off to openFile so   │
+    // │ tryRevealParentFallback in App.tsx reveals the nearest existing │
+    // │ parent in Finder with a friendly toast.                         │
+    // └─────────────────────────────────────────────────────────────────┘
+    optionsRef.current.openFileExternal(resolvedPath)
   }, []) // Stable: uses optionsRef
 
   /** Open file directly in external app, bypassing classification/preview.
@@ -297,6 +329,43 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+/**
+ * BFS the session cwd for `requestedRelative`. Returns the absolute path of
+ * the best match (file, exact suffix, shortest path) or null if none found.
+ *
+ * Use case: agent operates inside a sub-directory the session doesn't track,
+ * so `cwd + relative` misses. e.g. agent works in
+ *   /ppt-skills/guizang-ppt-skill-remix/
+ * but session cwd is /ppt-skills/, and emits `test-deck-enterprise/index.html`.
+ * Searching for that relative path under cwd finds the real location.
+ *
+ * Ranking:
+ *   1. Filter to type='file' with exact suffix match (path === requested OR
+ *      path ends with `/requested`).
+ *   2. Prefer the shortest relativePath (closer to root, less likely a copy).
+ */
+async function fuzzyResolvePath(
+  searchFiles: ((basePath: string, query: string) => Promise<Array<{ path: string; type: 'file' | 'directory'; relativePath: string }>>) | undefined,
+  cwd: string,
+  requestedRelative: string,
+): Promise<string | null> {
+  if (!searchFiles) return null
+  try {
+    const results = await searchFiles(cwd, requestedRelative)
+    const exactSuffix = results.filter(r =>
+      r.type === 'file' && (
+        r.relativePath === requestedRelative ||
+        r.relativePath.endsWith(`/${requestedRelative}`)
+      )
+    )
+    if (exactSuffix.length === 0) return null
+    exactSuffix.sort((a, b) => a.relativePath.length - b.relativePath.length)
+    return exactSuffix[0].path
+  } catch {
+    return null
+  }
+}
 
 /**
  * Build the initial preview state for text-based file types.

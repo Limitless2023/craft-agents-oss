@@ -1691,6 +1691,7 @@ export default function App() {
     readFile: (path) => window.electronAPI.readFile(path),
     readFileDataUrl: (path) => window.electronAPI.readFileDataUrl(path),
     readFileBinary: (path) => window.electronAPI.readFileBinary(path),
+    searchFiles: (basePath, query) => window.electronAPI.searchFiles(basePath, query),
   })
 
   const connectionState = useTransportConnectionState()
