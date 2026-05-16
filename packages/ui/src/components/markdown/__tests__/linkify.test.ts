@@ -81,6 +81,58 @@ describe('preprocessLinks', () => {
       const input = 'Visit example.com today'
       expect(preprocessLinks(input)).toBe('Visit [example.com](http://example.com) today')
     })
+  })
+
+  // ============================================================================
+  // Inline code file linkification — `SKILL.md` style references should become
+  // clickable while preserving the monospace inline-code styling.
+  // ============================================================================
+
+  describe('inline code file linkification', () => {
+    it('wraps a backticked markdown filename as a link with code inside', () => {
+      const input = '`SKILL.md`'
+      expect(preprocessLinks(input)).toBe('[`SKILL.md`](SKILL.md)')
+    })
+
+    it('wraps a backticked multi-segment path', () => {
+      const input = '`assets/template-enterprise.html`'
+      expect(preprocessLinks(input)).toBe('[`assets/template-enterprise.html`](assets/template-enterprise.html)')
+    })
+
+    it('wraps a backticked absolute path', () => {
+      const input = '`/Users/foo/bar.pdf`'
+      expect(preprocessLinks(input)).toBe('[`/Users/foo/bar.pdf`](/Users/foo/bar.pdf)')
+    })
+
+    it('does NOT wrap method-call patterns: console.log', () => {
+      const input = 'Use `console.log` to debug'
+      expect(preprocessLinks(input)).toBe('Use `console.log` to debug')
+    })
+
+    it('does NOT wrap method-call patterns: res.json', () => {
+      const input = 'Call `res.json` to send'
+      expect(preprocessLinks(input)).toBe('Call `res.json` to send')
+    })
+
+    it('does NOT wrap method-call patterns: process.env', () => {
+      const input = 'Read `process.env` for config'
+      expect(preprocessLinks(input)).toBe('Read `process.env` for config')
+    })
+
+    it('DOES wrap ambiguous-ext paths when they have a directory', () => {
+      const input = '`config/settings.json`'
+      expect(preprocessLinks(input)).toBe('[`config/settings.json`](config/settings.json)')
+    })
+
+    it('leaves backticks inside fenced code blocks alone', () => {
+      const input = '```ts\nconst x = `SKILL.md`\n```'
+      expect(preprocessLinks(input)).toBe(input)
+    })
+
+    it('does not double-wrap a backticked filename already inside a markdown link', () => {
+      const input = '[`SKILL.md`](custom-url)'
+      expect(preprocessLinks(input)).toBe(input)
+    })
 
     it('wraps bare URL but preserves adjacent markdown link', () => {
       const input = 'See https://bare.example.com and [linked.example.com - Title](https://linked.example.com/page)'

@@ -39,25 +39,35 @@ interface CodeRange {
 }
 
 /**
- * Find all code block and inline code ranges in text
- * These ranges should be excluded from link detection
+ * Find fenced code block ranges (```...```) only.
+ * Used by code paths that should NEVER touch real code (e.g. raw URL/path
+ * detection). Inline code spans are handled separately so that backtick-
+ * enclosed file references like `SKILL.md` can be reclassified as links
+ * by linkifyInlineCodeFilePaths().
  */
-function findCodeRanges(text: string): CodeRange[] {
+function findFencedCodeRanges(text: string): CodeRange[] {
   const ranges: CodeRange[] = []
-
-  // Find fenced code blocks (```...```)
   const fencedRegex = /```[\s\S]*?```/g
   let match
   while ((match = fencedRegex.exec(text)) !== null) {
     ranges.push({ start: match.index, end: match.index + match[0].length })
   }
+  return ranges
+}
 
-  // Find inline code (`...`)
-  // But skip escaped backticks and code inside fenced blocks
+/**
+ * Find all code block AND inline code ranges in text.
+ * Used by detectLinks/preprocessLinks to skip raw-text link detection inside
+ * code spans — backtick-enclosed file paths get linkified separately via
+ * linkifyInlineCodeFilePaths() before this runs.
+ */
+function findCodeRanges(text: string): CodeRange[] {
+  const ranges: CodeRange[] = findFencedCodeRanges(text)
+
   const inlineRegex = /(?<!`)`(?!`)([^`\n]+)`(?!`)/g
+  let match
   while ((match = inlineRegex.exec(text)) !== null) {
     const pos = match.index
-    // Check if this is inside a fenced block
     const insideFenced = ranges.some(r => pos >= r.start && pos < r.end)
     if (!insideFenced) {
       ranges.push({ start: pos, end: pos + match[0].length })
@@ -243,6 +253,67 @@ function stripPlaceholderLinks(text: string): string {
   )
 }
 
+// ╔════════════════════════════════════════════════════════════════════════╗
+// ║ Inline-code file linkification                                         ║
+// ║                                                                        ║
+// ║ AI agents commonly wrap filenames in backticks (`SKILL.md`,            ║
+// ║ `assets/template.html`). Default markdown rendering keeps those as     ║
+// ║ inert monospace text. We wrap them as markdown links while preserving  ║
+// ║ the inline-code styling so users see green underlined *monospace* —    ║
+// ║ both the "this is a filename" visual cue and clickability.             ║
+// ║                                                                        ║
+// ║ Heuristic must NOT linkify method/property patterns like               ║
+// ║ `console.log`, `res.json`, `process.env`. The AMBIGUOUS set below      ║
+// ║ contains extensions whose tokens are commonly method names; for those, ║
+// ║ a directory component (a `/`) is required.                             ║
+// ╚════════════════════════════════════════════════════════════════════════╝
+
+/** Extensions that double as common method/property names — require a `/` to count as a file. */
+const AMBIGUOUS_FILE_EXTENSIONS = new Set(['json', 'log', 'env'])
+
+/** Does this inline-code content look like a file reference (vs. a method call)? */
+function looksLikeFileReference(content: string): boolean {
+  if (!FILE_PATH_TARGET_REGEX.test(content)) return false
+  if (content.includes('/')) return true
+  const ext = content.split('.').pop()?.toLowerCase() ?? ''
+  return !AMBIGUOUS_FILE_EXTENSIONS.has(ext)
+}
+
+/**
+ * Wrap backtick-enclosed file references as clickable markdown links while
+ * preserving the inline-code styling.
+ *
+ *   `SKILL.md`                          → [`SKILL.md`](SKILL.md)
+ *   `assets/template-enterprise.html`   → [`assets/template-enterprise.html`](assets/template-enterprise.html)
+ *
+ * Skipped:
+ *   - Content inside fenced code blocks (real code, not file references)
+ *   - Content already inside a markdown link (avoid double-wrapping)
+ *   - Method/property patterns (`console.log`, `res.json`) via looksLikeFileReference
+ */
+function linkifyInlineCodeFilePaths(text: string): string {
+  // Quick check — no backticks, nothing to do
+  if (!text.includes('`')) return text
+
+  const fencedRanges = findFencedCodeRanges(text)
+  const markdownLinkRanges = findMarkdownLinkRanges(text)
+
+  return text.replace(
+    /(?<!`)`(?!`)([^`\n]+)`(?!`)/g,
+    (fullMatch, content: string, offset: number) => {
+      if (fencedRanges.some(r => offset >= r.start && offset < r.end)) return fullMatch
+      if (markdownLinkRanges.some(r => offset >= r.start && offset < r.end)) return fullMatch
+
+      const trimmed = content.trim()
+      if (!looksLikeFileReference(trimmed)) return fullMatch
+
+      // Keep the original backticks inside the link text — markdown will
+      // render them as <code> inside <a>, giving us monospace + clickable.
+      return `[${fullMatch}](${trimmed})`
+    }
+  )
+}
+
 /**
  * Encode problematic characters in local file path markdown links.
  * Markdown parsers don't recognize [text](/path with spaces) as a link because
@@ -286,6 +357,11 @@ export function preprocessLinks(text: string): string {
   // Second pass: strip markdown links with placeholder/fabricated URLs
   // (e.g., AI-generated `[commit](https://github.com/...)` → `\`commit\``)
   text = stripPlaceholderLinks(text)
+
+  // Third pass: wrap backtick-enclosed file references as links.
+  // Runs BEFORE detectLinks so the resulting markdown links are picked up
+  // as "already linked" ranges by findMarkdownLinkRanges below.
+  text = linkifyInlineCodeFilePaths(text)
 
   // Quick check - if no potential links, return early
   if (!linkify.pretest(text) && !FILE_PATH_PRETEST_REGEX.test(text)) {
