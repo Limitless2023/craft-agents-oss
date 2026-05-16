@@ -10,7 +10,7 @@
 
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
-import { BookOpen, Search, X, FolderOpen } from 'lucide-react'
+import { BookOpen, Search, X, FolderOpen, RotateCw } from 'lucide-react'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { useSession, useAppShellContext } from '@/context/AppShellContext'
 import { SessionFilesSection } from './SessionFilesSection'
@@ -36,6 +36,14 @@ function DocsPanelContent({ sessionId, closeButton }: { sessionId: string; close
   const [filterQuery, setFilterQuery] = React.useState('')
   const [isSearchOpen, setIsSearchOpen] = React.useState(false)
   const searchInputRef = React.useRef<HTMLInputElement>(null)
+  const [refreshToken, setRefreshToken] = React.useState(0)
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
+
+  const handleRefresh = React.useCallback(() => {
+    setIsRefreshing(true)
+    setRefreshToken(t => t + 1)
+    setTimeout(() => setIsRefreshing(false), 600)
+  }, [])
 
   // Split pane state — ratio is the fraction of available height for the top (working dir) pane
   const [splitRatio, setSplitRatio] = React.useState(() =>
@@ -114,6 +122,13 @@ function DocsPanelContent({ sessionId, closeButton }: { sessionId: string; close
         </div>
         <div className="flex items-center gap-1">
           <button
+            onClick={handleRefresh}
+            className="p-1 rounded-[6px] transition-colors text-muted-foreground/50 hover:text-foreground"
+            title="Refresh file list"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+          <button
             onClick={() => {
               if (isSearchOpen) {
                 handleClearSearch()
@@ -191,6 +206,7 @@ function DocsPanelContent({ sessionId, closeButton }: { sessionId: string; close
               <WorkingDirectoryTree
                 dirPath={activeSessionWorkingDirectory}
                 filterQuery={filterQuery || undefined}
+                refreshToken={refreshToken}
               />
             </div>
           ) : (

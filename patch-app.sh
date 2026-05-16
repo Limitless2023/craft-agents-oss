@@ -4,8 +4,10 @@ set -e
 APP_ROOT="/Applications/Craft Agents.app/Contents"
 APP_DIST="$APP_ROOT/Resources/app/dist"
 APP_PACKAGE_JSON="$APP_ROOT/Resources/app/package.json"
+APP_NM_ANTHROPIC="$APP_ROOT/Resources/app/node_modules/@anthropic-ai"
 BUILD="/Users/limitless/Desktop/Projects/craft-agents-oss/apps/electron/dist"
 BUILD_PACKAGE_JSON="/Users/limitless/Desktop/Projects/craft-agents-oss/apps/electron/package.json"
+REPO_NM_ANTHROPIC="/Users/limitless/Desktop/Projects/craft-agents-oss/node_modules/@anthropic-ai"
 PLIST="$APP_ROOT/Info.plist"
 APP_VERSION="$(node -p "require('$BUILD_PACKAGE_JSON').version")"
 
@@ -27,6 +29,33 @@ echo "Renderer synced"
 # --- Step 4: Sync app metadata/version ---
 echo "Syncing package.json..."
 cp "$BUILD_PACKAGE_JSON" "$APP_PACKAGE_JSON"
+
+# ===========================================================================
+# Step 4.5: Sync Claude Agent SDK + native binary
+# ---------------------------------------------------------------------------
+# 自 SDK v0.2.x 起，native 可执行文件 `claude` 被拆到平台特定包
+# `@anthropic-ai/claude-agent-sdk-<platform>-<arch>` 中分发。
+# 升级时若不同步这两个包，启动会抛
+# "Claude Agent SDK native binary not found. The app package may be corrupted."
+# ===========================================================================
+echo "Syncing @anthropic-ai/claude-agent-sdk..."
+mkdir -p "$APP_NM_ANTHROPIC"
+rsync -a --delete "$REPO_NM_ANTHROPIC/claude-agent-sdk/" "$APP_NM_ANTHROPIC/claude-agent-sdk/"
+
+# 确定当前架构对应的 binary 包（macOS only — Linux/Windows 走各自打包流程）
+ARCH_RAW="$(uname -m)"
+case "$ARCH_RAW" in
+  arm64|aarch64) BINARY_PKG="claude-agent-sdk-darwin-arm64" ;;
+  x86_64)        BINARY_PKG="claude-agent-sdk-darwin-x64"   ;;
+  *)             BINARY_PKG="" ;;
+esac
+
+if [ -n "$BINARY_PKG" ] && [ -d "$REPO_NM_ANTHROPIC/$BINARY_PKG" ]; then
+  echo "Syncing native binary package: $BINARY_PKG..."
+  rsync -a --delete "$REPO_NM_ANTHROPIC/$BINARY_PKG/" "$APP_NM_ANTHROPIC/$BINARY_PKG/"
+else
+  echo "WARN: native binary package not found in repo node_modules — run 'bun install' first"
+fi
 
 echo "Setting app version to $APP_VERSION..."
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST" 2>/dev/null \

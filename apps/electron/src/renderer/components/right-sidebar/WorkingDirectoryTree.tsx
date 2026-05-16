@@ -5,10 +5,12 @@
  */
 
 import * as React from 'react'
-import { useState, useCallback, memo } from 'react'
+import { useState, useCallback, useEffect, useRef, memo } from 'react'
 import { File, Folder, FolderOpen, FileText, Image, FileCode, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppShellContext } from '@/context/AppShellContext'
+
+const WORKING_DIR_POLL_MS = 3000
 
 interface FileEntry {
   name: string
@@ -113,29 +115,46 @@ const TreeNode = memo(function TreeNode({ entry, depth, onFileClick }: TreeNodeP
 interface WorkingDirectoryTreeProps {
   dirPath: string
   filterQuery?: string
+  /** Incremented externally to force a manual refresh */
+  refreshToken?: number
 }
 
-export function WorkingDirectoryTree({ dirPath, filterQuery }: WorkingDirectoryTreeProps) {
+export function WorkingDirectoryTree({ dirPath, filterQuery, refreshToken }: WorkingDirectoryTreeProps) {
   const [items, setItems] = React.useState<FileEntry[] | null>(null)
   const [isLoading, setIsLoading] = React.useState(false)
   const { onOpenFile } = useAppShellContext()
+  const mountedRef = useRef(true)
 
-  React.useEffect(() => {
-    let cancelled = false
+  const fetchItems = useCallback(() => {
+    window.electronAPI.listFiles(dirPath).then((result) => {
+      if (mountedRef.current) setItems(result.items)
+    }).catch(() => {
+      if (mountedRef.current) setItems([])
+    })
+  }, [dirPath])
+
+  // Initial load (with loading state)
+  useEffect(() => {
+    mountedRef.current = true
     setIsLoading(true)
     window.electronAPI.listFiles(dirPath).then((result) => {
-      if (!cancelled) {
-        setItems(result.items)
-        setIsLoading(false)
-      }
+      if (mountedRef.current) { setItems(result.items); setIsLoading(false) }
     }).catch(() => {
-      if (!cancelled) {
-        setItems([])
-        setIsLoading(false)
-      }
+      if (mountedRef.current) { setItems([]); setIsLoading(false) }
     })
-    return () => { cancelled = true }
+    return () => { mountedRef.current = false }
   }, [dirPath])
+
+  // Poll every 3s to pick up file additions without a dedicated watcher IPC
+  useEffect(() => {
+    const id = setInterval(fetchItems, WORKING_DIR_POLL_MS)
+    return () => clearInterval(id)
+  }, [fetchItems])
+
+  // Manual refresh via refreshToken
+  useEffect(() => {
+    if (refreshToken !== undefined) fetchItems()
+  }, [refreshToken, fetchItems])
 
   const handleFileClick = useCallback((path: string) => {
     onOpenFile(path)

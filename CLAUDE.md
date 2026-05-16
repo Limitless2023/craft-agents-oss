@@ -70,6 +70,7 @@ bun install
 # 2. Build the renderer
 export https_proxy=http://127.0.0.1:7893   # proxy if needed
 export http_proxy=http://127.0.0.1:7893
+export all_proxy=socks5://127.0.0.1:7893
 bun run --filter '@craft-agent/electron' build:renderer
 
 # 3. Quit Craft Agents (Cmd+Q), then run the patch script
