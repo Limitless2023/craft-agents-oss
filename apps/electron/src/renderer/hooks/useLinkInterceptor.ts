@@ -210,13 +210,14 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
 
     // For text-based files: read content first, then show overlay with content ready.
     // Local filesystem reads are near-instant — no loading state needed.
+    let firstError: unknown
     try {
       const content = await optionsRef.current.readFile(resolvedPath)
       const state = buildInitialTextState(type, resolvedPath)
       setPreviewState({ ...state, content } as FilePreviewState)
       return
-    } catch {
-      // Fall through to fuzzy resolution below
+    } catch (err) {
+      firstError = err
     }
 
     // ┌───────────────────────────────────────────────────────────────────┐
@@ -241,11 +242,15 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
     }
 
     // ┌─────────────────────────────────────────────────────────────────┐
-    // │ Last resort — file genuinely missing. Hand off to openFile so   │
-    // │ tryRevealParentFallback in App.tsx reveals the nearest existing │
-    // │ parent in Finder with a friendly toast.                         │
+    // │ Last resort — show the preview overlay with the read error so   │
+    // │ the user sees *why* it failed. Don't silently bounce them to    │
+    // │ the parent folder; that's good UX for non-preview routes (zip   │
+    // │ etc.) but here the user explicitly clicked something the app    │
+    // │ classified as a previewable text file. Surface the diagnostic.  │
     // └─────────────────────────────────────────────────────────────────┘
-    optionsRef.current.openFileExternal(resolvedPath)
+    const errorMsg = firstError instanceof Error ? firstError.message : 'Failed to read file'
+    const state = buildInitialTextState(type, resolvedPath)
+    setPreviewState({ ...state, content: '', error: errorMsg } as FilePreviewState)
   }, []) // Stable: uses optionsRef
 
   /** Open file directly in external app, bypassing classification/preview.
