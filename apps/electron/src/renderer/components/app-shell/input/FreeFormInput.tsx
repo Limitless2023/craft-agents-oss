@@ -38,6 +38,7 @@ import {
 import type { LabelConfig } from '@craft-agent/shared/labels'
 import { parseMentions } from '@/lib/mentions'
 import { RichTextInput, type RichTextInputHandle } from '@/components/ui/rich-text-input'
+import { InfoDocPicker, type InfoDocResult } from './InfoDocPicker'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@craft-agent/ui'
 import {
   DropdownMenu,
@@ -1010,6 +1011,39 @@ export function FreeFormInput({
     activeStateId: currentSessionStatus,
   })
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ ⌘I info-doc picker — quick reference to files in session cwd.       │
+  // │                                                                     │
+  // │ Triggered by ⌘I (Ctrl+I on non-mac). Unlike @ mention, no character │
+  // │ is inserted; the picker owns its own filter field. We capture the   │
+  // │ caret position at trigger time so the chosen file gets inserted at  │
+  // │ exactly that spot after the picker closes.                          │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const [infoDocPicker, setInfoDocPicker] = React.useState<{
+    open: boolean
+    position: { x: number; y: number } | null
+    cursorPos: number
+  }>({ open: false, position: null, cursorPos: 0 })
+
+  const handleInfoDocSelect = React.useCallback((file: InfoDocResult) => {
+    // Use the relativePath (e.g. "01-Config/Prompts/SKILL.md") so the
+    // inserted link survives cwd changes and our fuzzy resolver can find
+    // it even when the agent operates in a sub-directory.
+    const linkText = `[${file.name}](${file.relativePath})`
+    const insertAt = infoDocPicker.cursorPos
+    const currentValue = inputRef.current
+    const newValue = currentValue.slice(0, insertAt) + linkText + currentValue.slice(insertAt)
+    setInput(newValue)
+    syncToParent(newValue)
+    setInfoDocPicker({ open: false, position: null, cursorPos: 0 })
+    // Restore focus and place cursor after the inserted link
+    setTimeout(() => {
+      richInputRef.current?.focus()
+      const after = insertAt + linkText.length
+      richInputRef.current?.setSelectionRange(after, after)
+    }, 0)
+  }, [infoDocPicker.cursorPos, syncToParent])
+
   // "Add New Label" handler: cleans up the #trigger text and opens a controlled
   // EditPopover so the user can describe the label before the agent creates it.
   const [addLabelPopoverOpen, setAddLabelPopoverOpen] = React.useState(false)
@@ -1322,6 +1356,36 @@ export function FreeFormInput({
       return
     }
 
+    // ┌─────────────────────────────────────────────────────────────────┐
+    // │ ⌘I (Ctrl+I on non-mac): open info-doc picker at the caret.      │
+    // │ preventDefault here also blocks contenteditable's default       │
+    // │ italic toggle on selected text.                                 │
+    // │ Skip when any other inline picker is already open — those       │
+    // │ pickers handle their own keys.                                  │
+    // └─────────────────────────────────────────────────────────────────┘
+    if (
+      (e.metaKey || e.ctrlKey) &&
+      !e.shiftKey &&
+      !e.altKey &&
+      (e.key === 'i' || e.key === 'I') &&
+      !inlineMention.isOpen &&
+      !inlineSlash.isOpen &&
+      !inlineLabel.isOpen &&
+      !e.nativeEvent.isComposing
+    ) {
+      e.preventDefault()
+      const caretRect = richInputRef.current?.getCaretRect?.()
+      const cursorPos = richInputRef.current?.selectionStart ?? inputRef.current.length
+      if (caretRect && caretRect.x > 0) {
+        setInfoDocPicker({
+          open: true,
+          position: { x: caretRect.x, y: caretRect.y },
+          cursorPos,
+        })
+      }
+      return
+    }
+
     // Don't submit when mention menu is open AND has visible content
     if (inlineMention.isOpen) {
       // Only intercept navigation/selection keys if menu actually shows items or is loading
@@ -1588,6 +1652,21 @@ export function FreeFormInput({
           workspaceId={workspaceId}
           maxWidth={280}
           isSearching={inlineMention.isSearching}
+        />
+
+        {/* ⌘I Info-doc picker — quick file-reference insertion */}
+        <InfoDocPicker
+          open={infoDocPicker.open}
+          onOpenChange={(open) => {
+            if (!open) {
+              setInfoDocPicker({ open: false, position: null, cursorPos: 0 })
+              // Return focus to the chat input on dismiss (Esc / click-outside)
+              setTimeout(() => richInputRef.current?.focus(), 0)
+            }
+          }}
+          onSelect={handleInfoDocSelect}
+          basePath={workingDirectory}
+          position={infoDocPicker.position}
         />
 
         {/* Inline Label & State Autocomplete (#labels / #states) */}
