@@ -11,7 +11,7 @@
  * Uses FullscreenOverlayBase for portal, traffic lights, ESC handling, and header.
  */
 
-import { ListTodo } from 'lucide-react'
+import { ListTodo, PanelRightOpen } from 'lucide-react'
 import { Markdown } from '../markdown'
 import type { AnnotationV1 } from '@craft-agent/core'
 import type { ExternalOpenAnnotationRequest } from '../annotations/use-annotation-interaction-controller'
@@ -56,6 +56,13 @@ export interface DocumentFormattedMarkdownOverlayProps {
   isStreaming?: boolean
   /** Optional external request to open a specific annotation */
   openAnnotationRequest?: ExternalOpenAnnotationRequest | null
+  /**
+   * Optional "dock to sidebar" action. When provided, a button appears in
+   * the overlay header that calls this handler — the host app uses it to
+   * convert the current overlay into a sidebar Preview tab (skipping the
+   * close-overlay → find-in-tree → right-click round-trip).
+   */
+  onDockToSidebar?: (filePath: string) => void
 }
 
 export function DocumentFormattedMarkdownOverlay({
@@ -77,7 +84,19 @@ export function DocumentFormattedMarkdownOverlay({
   sendMessageKey = 'enter',
   isStreaming = false,
   openAnnotationRequest,
+  onDockToSidebar,
 }: DocumentFormattedMarkdownOverlayProps) {
+  // Dock button — shown to the left of the built-in copy button when the
+  // host wires `onDockToSidebar` AND we have a real filePath to dock.
+  const dockAction = onDockToSidebar && filePath ? (
+    <button
+      onClick={() => onDockToSidebar(filePath)}
+      title="Dock to sidebar"
+      className="inline-flex items-center justify-center w-7 h-7 rounded-[6px] bg-background shadow-minimal text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <PanelRightOpen className="w-3.5 h-3.5" />
+    </button>
+  ) : null
   return (
     <FullscreenOverlayBase
       isOpen={isOpen}
@@ -85,6 +104,7 @@ export function DocumentFormattedMarkdownOverlay({
       filePath={filePath}
       typeBadge={typeBadge}
       copyContent={content}
+      headerActions={dockAction}
       error={error ? { label: 'Write Failed', message: error } : undefined}
     >
       {/* Content wrapper — min-h-full for vertical centering within FullscreenOverlayBase's scroll container.

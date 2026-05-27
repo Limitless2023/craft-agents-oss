@@ -25,7 +25,9 @@ import { useOnboarding } from '@/hooks/useOnboarding'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useSession } from '@/hooks/useSession'
 import { useUpdateChecker } from '@/hooks/useUpdateChecker'
-import { NavigationProvider } from '@/contexts/NavigationContext'
+import { NavigationProvider, useNavigation } from '@/contexts/NavigationContext'
+import { sidebarDocsAtomFamily, openSidebarDocTab } from '@/atoms/sidebar-docs'
+import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { navigate, routes } from './lib/navigate'
 import { attachmentFromContentRef, toDraftRef } from './lib/drafts'
 import { stripMarkdown } from './utils/text'
@@ -2176,6 +2178,22 @@ function FilePreviewRenderer({
 }) {
   const theme = isDark ? 'dark' : 'light' as const
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Dock-to-sidebar handler — only meaningful for markdown overlays    │
+  // │ since the Preview panel is .md-only. Pushes the current filePath  │
+  // │ as a tab into the focused session's sidebar-docs atom, flips the  │
+  // │ right sidebar to 'preview', and closes the overlay.                │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const focusedSessionId = useAtomValue(focusedSessionIdAtom)
+  const setSidebarDocs = useSetAtom(sidebarDocsAtomFamily(focusedSessionId ?? '__none__'))
+  const { updateRightSidebar } = useNavigation()
+  const handleDockToSidebar = useCallback((filePath: string) => {
+    if (!focusedSessionId) return
+    setSidebarDocs((prev) => openSidebarDocTab(prev, filePath))
+    updateRightSidebar({ type: 'preview' })
+    onClose()
+  }, [focusedSessionId, setSidebarDocs, updateRightSidebar, onClose])
+
   switch (state.type) {
     case 'image':
       // `key` includes refreshNonce so ⌘R remounts the overlay, dropping
@@ -2230,6 +2248,7 @@ function FilePreviewRenderer({
           content={state.content ?? ''}
           filePath={state.filePath}
           variant={isPlanFile ? 'plan' : 'response'}
+          onDockToSidebar={handleDockToSidebar}
         />
       )
     }

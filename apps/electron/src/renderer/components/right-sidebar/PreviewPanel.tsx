@@ -89,6 +89,42 @@ function PreviewPanelContent({
   }, [state.tabs])
 
   // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Auto-refresh — poll the active tab's file every 2s and update the   │
+  // │ cached content if it changed. This lets the user keep their eyes   │
+  // │ on the preview while the agent edits the file, without manual ⌘R. │
+  // │                                                                     │
+  // │ Compares against `setContents` updater's prev to avoid setState     │
+  // │ when bytes haven't changed (React still bails on identical state    │
+  // │ refs but explicit string equality short-circuits earlier). 2s is    │
+  // │ slow enough to avoid re-rendering mid-write yet fast enough that    │
+  // │ the user perceives "live" updates as the agent works.               │
+  // └─────────────────────────────────────────────────────────────────────┘
+  React.useEffect(() => {
+    if (!activeTab) return
+    const filePath = activeTab.filePath
+    let cancelled = false
+    const POLL_MS = 2000
+    const id = setInterval(async () => {
+      try {
+        const next = await window.electronAPI.readFile(filePath)
+        if (cancelled) return
+        setContents((prev) => {
+          const existing = prev[filePath]
+          if (existing && existing.content === next && !existing.error) return prev
+          return { ...prev, [filePath]: { content: next } }
+        })
+      } catch {
+        // Silent: the file may be momentarily missing during writes / renames.
+        // The next poll will recover, or the user can click refresh manually.
+      }
+    }, POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [activeTab?.filePath])
+
+  // ┌─────────────────────────────────────────────────────────────────────┐
   // │ Keyboard shortcuts while the panel is mounted:                      │
   // │   ⌘R / Ctrl+R → refresh active tab                                  │
   // │   ⌘W / Ctrl+W → close active tab (skipped if there's no tab)        │
