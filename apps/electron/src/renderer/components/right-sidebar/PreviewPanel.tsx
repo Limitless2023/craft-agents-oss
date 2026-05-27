@@ -21,7 +21,7 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { useAtom } from 'jotai'
-import { FileText, X, RotateCw, FolderSearch } from 'lucide-react'
+import { FileText, X, RotateCw, FolderSearch, Maximize2 } from 'lucide-react'
 import { Markdown } from '@craft-agent/ui'
 import { cn } from '@/lib/utils'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
@@ -194,13 +194,26 @@ function PreviewPanelContent({
         </div>
         <div className="flex items-center gap-1">
           {activeTab && (
-            <button
-              onClick={() => setRefreshNonce((n) => n + 1)}
-              className="p-1 rounded-[6px] transition-colors text-muted-foreground/50 hover:text-foreground"
-              title="Refresh (⌘R)"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-            </button>
+            <>
+              <button
+                onClick={() => setRefreshNonce((n) => n + 1)}
+                className="p-1 rounded-[6px] transition-colors text-muted-foreground/50 hover:text-foreground"
+                title="Refresh (⌘R)"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+              </button>
+              {/* Pop out to full-screen overlay. Reuses the link interceptor
+                 via onOpenFile — same routing path as clicking a .md link in
+                 chat (markdown → DocumentFormattedMarkdownOverlay). Tab stays
+                 in the sidebar so the user can come back after closing. */}
+              <button
+                onClick={() => onOpenFile(activeTab.filePath)}
+                className="p-1 rounded-[6px] transition-colors text-muted-foreground/50 hover:text-foreground"
+                title="Open in full-screen overlay"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+            </>
           )}
           {closeButton}
         </div>
