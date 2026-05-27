@@ -6,9 +6,19 @@
 
 import * as React from 'react'
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
-import { File, Folder, FolderOpen, FileText, Image, FileCode, ChevronRight } from 'lucide-react'
+import { File, Folder, FolderOpen, FileText, Image, FileCode, ChevronRight, Eye, ExternalLink } from 'lucide-react'
+import { useSetAtom, useAtomValue } from 'jotai'
 import { cn } from '@/lib/utils'
 import { useAppShellContext } from '@/context/AppShellContext'
+import { useNavigation } from '@/contexts/NavigationContext'
+import { focusedSessionIdAtom } from '@/atoms/panel-stack'
+import { sidebarDocsAtomFamily, openSidebarDocTab } from '@/atoms/sidebar-docs'
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  StyledContextMenuContent,
+  StyledContextMenuItem,
+} from '@/components/ui/styled-context-menu'
 
 const WORKING_DIR_POLL_MS = 3000
 
@@ -23,6 +33,7 @@ interface TreeNodeProps {
   entry: FileEntry
   depth: number
   onFileClick: (path: string) => void
+  onOpenInSidebar?: (path: string) => void
 }
 
 function getIcon(entry: FileEntry, isExpanded: boolean) {
@@ -37,7 +48,7 @@ function getIcon(entry: FileEntry, isExpanded: boolean) {
   return <File className={cls} />
 }
 
-const TreeNode = memo(function TreeNode({ entry, depth, onFileClick }: TreeNodeProps) {
+const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenInSidebar }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [children, setChildren] = useState<FileEntry[] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -61,30 +72,54 @@ const TreeNode = memo(function TreeNode({ entry, depth, onFileClick }: TreeNodeP
     }
   }, [entry, isExpanded, children, onFileClick])
 
+  const isMarkdown = entry.type === 'file' && /\.(md|mdx|markdown)$/i.test(entry.name)
+
+  const buttonEl = (
+    <button
+      onClick={handleClick}
+      className={cn(
+        "flex items-center gap-1.5 w-full text-left py-[3px] rounded-md",
+        "hover:bg-foreground/[0.04] transition-colors group text-xs",
+        entry.type === 'directory' ? 'font-medium' : 'text-foreground/70',
+      )}
+      style={{ paddingLeft: `${8 + depth * 14}px`, paddingRight: 8 }}
+      title={entry.path}
+    >
+      {entry.type === 'directory' && (
+        <ChevronRight
+          className={cn(
+            "h-3 w-3 text-muted-foreground/50 shrink-0 transition-transform duration-150",
+            isExpanded && "rotate-90"
+          )}
+        />
+      )}
+      {entry.type !== 'directory' && <span className="w-3 shrink-0" />}
+      {getIcon(entry, isExpanded)}
+      <span className="truncate">{entry.name}</span>
+    </button>
+  )
+
   return (
     <>
-      <button
-        onClick={handleClick}
-        className={cn(
-          "flex items-center gap-1.5 w-full text-left py-[3px] rounded-md",
-          "hover:bg-foreground/[0.04] transition-colors group text-xs",
-          entry.type === 'directory' ? 'font-medium' : 'text-foreground/70',
-        )}
-        style={{ paddingLeft: `${8 + depth * 14}px`, paddingRight: 8 }}
-        title={entry.path}
-      >
-        {entry.type === 'directory' && (
-          <ChevronRight
-            className={cn(
-              "h-3 w-3 text-muted-foreground/50 shrink-0 transition-transform duration-150",
-              isExpanded && "rotate-90"
+      {entry.type === 'file' ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>{buttonEl}</ContextMenuTrigger>
+          <StyledContextMenuContent>
+            <StyledContextMenuItem onSelect={() => onFileClick(entry.path)}>
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open
+            </StyledContextMenuItem>
+            {isMarkdown && onOpenInSidebar && (
+              <StyledContextMenuItem onSelect={() => onOpenInSidebar(entry.path)}>
+                <Eye className="h-3.5 w-3.5" />
+                Open in sidebar
+              </StyledContextMenuItem>
             )}
-          />
-        )}
-        {entry.type !== 'directory' && <span className="w-3 shrink-0" />}
-        {getIcon(entry, isExpanded)}
-        <span className="truncate">{entry.name}</span>
-      </button>
+          </StyledContextMenuContent>
+        </ContextMenu>
+      ) : (
+        buttonEl
+      )}
 
       {isExpanded && entry.type === 'directory' && (
         <div>
@@ -104,6 +139,7 @@ const TreeNode = memo(function TreeNode({ entry, depth, onFileClick }: TreeNodeP
               entry={child}
               depth={depth + 1}
               onFileClick={onFileClick}
+              onOpenInSidebar={onOpenInSidebar}
             />
           ))}
         </div>
@@ -160,6 +196,20 @@ export function WorkingDirectoryTree({ dirPath, filterQuery, refreshToken }: Wor
     onOpenFile(path)
   }, [onOpenFile])
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ "Open in sidebar" — push the file as a tab into the per-session    │
+  // │ sidebar-docs atom and force-open the preview panel.                │
+  // │ Falls back gracefully when no session is focused.                  │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const focusedSessionId = useAtomValue(focusedSessionIdAtom)
+  const setSidebarDocs = useSetAtom(sidebarDocsAtomFamily(focusedSessionId ?? '__none__'))
+  const { updateRightSidebar } = useNavigation()
+  const handleOpenInSidebar = useCallback((path: string) => {
+    if (!focusedSessionId) return
+    setSidebarDocs((prev) => openSidebarDocTab(prev, path))
+    updateRightSidebar({ type: 'preview' })
+  }, [focusedSessionId, setSidebarDocs, updateRightSidebar])
+
   if (isLoading || items === null) {
     return (
       <div className="px-4 py-2 text-xs text-muted-foreground/40">Loading...</div>
@@ -187,6 +237,7 @@ export function WorkingDirectoryTree({ dirPath, filterQuery, refreshToken }: Wor
           entry={item}
           depth={0}
           onFileClick={handleFileClick}
+          onOpenInSidebar={handleOpenInSidebar}
         />
       ))}
     </nav>

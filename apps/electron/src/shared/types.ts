@@ -769,6 +769,9 @@ export type RightSidebarPanel =
   | { type: 'files'; path?: string }
   | { type: 'history' }
   | { type: 'docs' }
+  // 'preview' — dedicated markdown doc preview pane (tabs). State per-session in
+  // sidebarDocsAtomFamily; URL just carries the type, tabs come from atom.
+  | { type: 'preview' }
   | { type: 'none' }
 
 /**

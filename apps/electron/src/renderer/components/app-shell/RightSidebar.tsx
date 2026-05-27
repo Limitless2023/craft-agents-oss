@@ -8,6 +8,7 @@
 import * as React from 'react'
 import type { RightSidebarPanel } from '../../../shared/types'
 import { DocsPanel } from '../right-sidebar/DocsPanel'
+import { PreviewPanel } from '../right-sidebar/PreviewPanel'
 
 export interface RightSidebarProps {
   /** Current panel configuration */
@@ -23,6 +24,9 @@ export function RightSidebar({ panel, closeButton }: RightSidebarProps) {
   switch (panel.type) {
     case 'docs':
       return <DocsPanel closeButton={closeButton} />
+
+    case 'preview':
+      return <PreviewPanel closeButton={closeButton} />
 
     case 'files':
       return (

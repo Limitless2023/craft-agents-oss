@@ -32,6 +32,7 @@ import {
   Bot,
   Info,
   BookOpen,
+  FileText as PreviewIcon,
   MailOpen,
 } from "lucide-react"
 // SessionStatusIcons no longer used - icons come from dynamic sessionStatuses
@@ -1607,12 +1608,26 @@ function AppShellContent({
     sessionStatuses: effectiveSessionStatuses,
     onSessionSourcesChange: handleSessionSourcesChange,
     rightSidebarButton: (
-      <PanelHeaderCenterButton
-        icon={<BookOpen className="h-4 w-4" />}
-        onClick={() => toggleRightSidebar({ type: 'docs' })}
-        tooltip="Info"
-        className={isRightSidebarOpen ? 'opacity-100' : undefined}
-      />
+      // ┌───────────────────────────────────────────────────────────────┐
+      // │ Two sibling buttons — Info (docs panel) and Preview (preview  │
+      // │ panel). Active state highlights whichever panel is currently  │
+      // │ open. Clicking the active one closes the sidebar; clicking    │
+      // │ the other switches to it (mutually exclusive).                │
+      // └───────────────────────────────────────────────────────────────┘
+      <div className="flex items-center gap-0.5">
+        <PanelHeaderCenterButton
+          icon={<BookOpen className="h-4 w-4" />}
+          onClick={() => toggleRightSidebar({ type: 'docs' })}
+          tooltip="Info"
+          className={rightSidebarPanel?.type === 'docs' ? 'opacity-100' : undefined}
+        />
+        <PanelHeaderCenterButton
+          icon={<PreviewIcon className="h-4 w-4" />}
+          onClick={() => toggleRightSidebar({ type: 'preview' })}
+          tooltip="Preview"
+          className={rightSidebarPanel?.type === 'preview' ? 'opacity-100' : undefined}
+        />
+      </div>
     ),
     isCompactMode: isAutoCompact,
     // Search state for ChatDisplay highlighting
@@ -1627,7 +1642,7 @@ function AppShellContent({
     automationTestResults,
     getAutomationHistory,
     onReplayAutomation: handleReplayAutomation,
-  }), [contextValue, handleDeleteSession, sources, skills, activeSessionWorkingDirectory, displayLabelConfigs, handleSessionLabelsChange, enabledModes, effectiveSessionStatuses, handleSessionSourcesChange, isAutoCompact, searchActive, searchQuery, handleChatMatchInfoChange, handleTestAutomation, handleToggleAutomation, handleDuplicateAutomation, handleDeleteAutomation, automationTestResults, getAutomationHistory, handleReplayAutomation, toggleRightSidebar, isRightSidebarOpen])
+  }), [contextValue, handleDeleteSession, sources, skills, activeSessionWorkingDirectory, displayLabelConfigs, handleSessionLabelsChange, enabledModes, effectiveSessionStatuses, handleSessionSourcesChange, isAutoCompact, searchActive, searchQuery, handleChatMatchInfoChange, handleTestAutomation, handleToggleAutomation, handleDuplicateAutomation, handleDeleteAutomation, automationTestResults, getAutomationHistory, handleReplayAutomation, toggleRightSidebar, isRightSidebarOpen, rightSidebarPanel])
 
   // Persist expanded folders to localStorage (workspace-scoped)
   React.useEffect(() => {
