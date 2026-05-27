@@ -23,14 +23,20 @@ import { getLanguageFromPath } from '@/lib/file-utils'
 // For text-based files (code, markdown, json, text), content starts as null
 // while the file is being read, then gets populated.
 
+// `refreshNonce` is bumped by refreshPreview() and used as a React `key` on the
+// image/PDF overlays so they fully remount and their internal load caches get
+// cleared. Text-based previews don't need this because their content is owned
+// by this hook and gets re-set on refresh.
 interface ImagePreview {
   type: 'image'
   filePath: string
+  refreshNonce?: number
 }
 
 interface PDFPreview {
   type: 'pdf'
   filePath: string
+  refreshNonce?: number
 }
 
 interface CodePreview {
@@ -124,6 +130,14 @@ interface LinkInterceptorResult {
   openCurrentExternal: () => void
   /** Reveal the currently previewed file in system file manager */
   revealCurrentInFinder: () => void
+  /**
+   * Re-load the currently previewed file from disk.
+   * Triggered by ⌘R / Ctrl+R while the overlay is open. For text-based
+   * previews (markdown/code/json/text) this re-reads via `readFile` and
+   * replaces `content`. For image/PDF this bumps `refreshNonce` so the
+   * overlay remounts and its internal load cache is dropped.
+   */
+  refreshPreview: () => void
   /** Read file as data URL — passed to image overlays as their loader */
   readFileDataUrl: (path: string) => Promise<string>
   /** Read file as binary — passed to PDF overlays for react-pdf */
@@ -310,6 +324,46 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
     }
   }, []) // Stable: uses refs
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ refreshPreview — re-load the currently previewed file from disk.    │
+  // │                                                                     │
+  // │ ⌘R / Ctrl+R while the overlay is open routes here. Two paths:       │
+  // │   - text-based (markdown / code / json / text): re-call readFile    │
+  // │     and replace `content`. On error, surface it in the overlay's    │
+  // │     existing error field instead of replacing valid content.        │
+  // │   - image / pdf: bump `refreshNonce`. App.tsx uses it as a React    │
+  // │     `key` on the overlay so it remounts, clearing the internal data │
+  // │     cache and forcing the loader to refetch from disk.              │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const refreshPreview = useCallback(async () => {
+    const state = previewStateRef.current
+    if (!state) return
+
+    if (state.type === 'image' || state.type === 'pdf') {
+      setPreviewState({
+        ...state,
+        refreshNonce: (state.refreshNonce ?? 0) + 1,
+      } as FilePreviewState)
+      return
+    }
+
+    // Text-based: re-read and update content. Keep the old content visible
+    // until the new read resolves so the overlay doesn't flash blank.
+    try {
+      const content = await optionsRef.current.readFile(state.filePath)
+      // Bail if the user closed the overlay or navigated to a different file
+      // while the read was in flight.
+      const current = previewStateRef.current
+      if (!current || current.filePath !== state.filePath || current.type !== state.type) return
+      setPreviewState({ ...current, content, error: undefined } as FilePreviewState)
+    } catch (err) {
+      const current = previewStateRef.current
+      if (!current || current.filePath !== state.filePath || current.type !== state.type) return
+      const errorMsg = err instanceof Error ? err.message : 'Failed to refresh file'
+      setPreviewState({ ...current, error: errorMsg } as FilePreviewState)
+    }
+  }, []) // Stable: uses refs
+
   /** Stable reference to readFileDataUrl for overlay components */
   const readFileDataUrl = useCallback((path: string) => {
     return optionsRef.current.readFileDataUrl(path)
@@ -328,6 +382,7 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
     closePreview,
     openCurrentExternal,
     revealCurrentInFinder,
+    refreshPreview,
     readFileDataUrl,
     readFileBinary,
   }

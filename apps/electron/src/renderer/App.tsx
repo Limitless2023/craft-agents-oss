@@ -1711,6 +1711,35 @@ export default function App() {
     return cleanup
   }, [handleOpenFile])
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ ⌘R / Ctrl+R — refresh the currently open preview overlay.            │
+  // │                                                                     │
+  // │ Only active while `previewState` is non-null. Otherwise ⌘R behaves  │
+  // │ like before (dev mode reloads the window via menu accelerator;      │
+  // │ packaged builds have no binding so the keystroke is a no-op).       │
+  // │ Calling preventDefault here also blocks the dev-mode reload while   │
+  // │ a preview is open — desirable, the user means "refresh THIS file".  │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const refreshPreview = linkInterceptor.refreshPreview
+  const hasPreview = linkInterceptor.previewState !== null
+  useEffect(() => {
+    if (!hasPreview) return
+    const handler = (e: KeyboardEvent) => {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        (e.key === 'r' || e.key === 'R')
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        refreshPreview()
+      }
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [hasPreview, refreshPreview])
+
   const handleOpenSettings = useCallback(() => {
     navigate(routes.view.settings())
   }, [])
@@ -2149,8 +2178,11 @@ function FilePreviewRenderer({
 
   switch (state.type) {
     case 'image':
+      // `key` includes refreshNonce so ⌘R remounts the overlay, dropping
+      // its internal contentCache and forcing loadDataUrl to refetch.
       return (
         <ImagePreviewOverlay
+          key={`${state.filePath}#${state.refreshNonce ?? 0}`}
           isOpen
           onClose={onClose}
           filePath={state.filePath}
@@ -2162,6 +2194,7 @@ function FilePreviewRenderer({
     case 'pdf':
       return (
         <PDFPreviewOverlay
+          key={`${state.filePath}#${state.refreshNonce ?? 0}`}
           isOpen
           onClose={onClose}
           filePath={state.filePath}
