@@ -76,6 +76,8 @@ import { MainContentPanel } from "./MainContentPanel"
 import { PanelStackContainer } from "./PanelStackContainer"
 import { RightSidebar } from "./RightSidebar"
 import { PanelHeaderCenterButton } from "@/components/ui/PanelHeaderCenterButton"
+import { InfoPopover } from "../right-sidebar/InfoPopover"
+import { sidebarDocsAtomFamily } from "@/atoms/sidebar-docs"
 import { CompactSessionListFilter } from "./CompactSessionListFilter"
 import type { ChatDisplayHandle } from "./ChatDisplay"
 import { LeftSidebar } from "./LeftSidebar"
@@ -602,6 +604,15 @@ function AppShellContent({
     storage.get(storage.KEYS.rightSidebarWidth, 240)
   )
   // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Info popover state — only used when Preview is the active sidebar.  │
+  // │ Clicking the Info icon in that case opens this floating popover     │
+  // │ instead of switching the sidebar, so the user can pick another .md │
+  // │ to open without losing the Preview view they're currently reading.  │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const [infoPopoverOpen, setInfoPopoverOpen] = React.useState(false)
+  // Auto-close wiring lives just after focusedSessionId is read (a few lines
+  // below) — see the [InfoPopover auto-close] block.
+  // ┌─────────────────────────────────────────────────────────────────────┐
   // │ Clamp width when switching panel types. Preview gets a wider max    │
   // │ (700px) so markdown is readable; Info / others stay at 480. If the  │
   // │ user drags Preview to 600 then flips to Info, snap back to 480.    │
@@ -618,6 +629,24 @@ function AppShellContent({
   const panelStack = useAtomValue(panelStackAtom)
   const panelCount = useAtomValue(panelCountAtom)
   const focusedSessionId = useAtomValue(focusedSessionIdAtom)
+
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ InfoPopover auto-close — when the user picks a doc from inside the │
+  // │ popover (right-click → "Open in sidebar"), sidebar-docs tab count  │
+  // │ grows. Detect that and close the popover so the freshly opened     │
+  // │ tab is immediately readable. Watching the atom here keeps the      │
+  // │ popover decoupled from the tree components.                        │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const sidebarDocsState = useAtomValue(sidebarDocsAtomFamily(focusedSessionId ?? '__none__'))
+  const prevTabCountRef = React.useRef(sidebarDocsState.tabs.length)
+  React.useEffect(() => {
+    const prev = prevTabCountRef.current
+    const curr = sidebarDocsState.tabs.length
+    if (curr > prev && infoPopoverOpen) {
+      setInfoPopoverOpen(false)
+    }
+    prevTabCountRef.current = curr
+  }, [sidebarDocsState.tabs.length, infoPopoverOpen])
 
   // Navigate the focused panel to a session.
   // If the session is already open in another panel, focus that panel instead.
@@ -1634,16 +1663,34 @@ function AppShellContent({
       // │ panel). Active state highlights whichever panel is currently  │
       // │ open. Clicking the active one closes the sidebar; clicking    │
       // │ the other switches to it (mutually exclusive).                │
-      // │ Use React.Fragment so PanelSlot's gap-1.5 spaces these the    │
-      // │ same as the close (X) button — no nested gap-0.5 cluster.    │
+      // │                                                               │
+      // │ Special case: when Preview is active, the Info icon opens a   │
+      // │ floating InfoPopover instead of switching the sidebar — lets │
+      // │ the user pick another .md without losing the current view.   │
       // └───────────────────────────────────────────────────────────────┘
       <>
-        <PanelHeaderCenterButton
-          icon={<BookOpen className="h-4 w-4" />}
-          onClick={() => toggleRightSidebar({ type: 'docs' })}
-          tooltip="Info"
-          className={rightSidebarPanel?.type === 'docs' ? 'opacity-100' : undefined}
-        />
+        {rightSidebarPanel?.type === 'preview' ? (
+          <InfoPopover
+            open={infoPopoverOpen}
+            onOpenChange={setInfoPopoverOpen}
+            sessionId={focusedSessionId}
+            trigger={
+              <PanelHeaderCenterButton
+                icon={<BookOpen className="h-4 w-4" />}
+                onClick={() => setInfoPopoverOpen((v) => !v)}
+                tooltip="Browse files"
+                className={infoPopoverOpen ? 'opacity-100' : undefined}
+              />
+            }
+          />
+        ) : (
+          <PanelHeaderCenterButton
+            icon={<BookOpen className="h-4 w-4" />}
+            onClick={() => toggleRightSidebar({ type: 'docs' })}
+            tooltip="Info"
+            className={rightSidebarPanel?.type === 'docs' ? 'opacity-100' : undefined}
+          />
+        )}
         <PanelHeaderCenterButton
           icon={<PreviewIcon className="h-4 w-4" />}
           onClick={() => toggleRightSidebar({ type: 'preview' })}
@@ -1665,7 +1712,7 @@ function AppShellContent({
     automationTestResults,
     getAutomationHistory,
     onReplayAutomation: handleReplayAutomation,
-  }), [contextValue, handleDeleteSession, sources, skills, activeSessionWorkingDirectory, displayLabelConfigs, handleSessionLabelsChange, enabledModes, effectiveSessionStatuses, handleSessionSourcesChange, isAutoCompact, searchActive, searchQuery, handleChatMatchInfoChange, handleTestAutomation, handleToggleAutomation, handleDuplicateAutomation, handleDeleteAutomation, automationTestResults, getAutomationHistory, handleReplayAutomation, toggleRightSidebar, isRightSidebarOpen, rightSidebarPanel])
+  }), [contextValue, handleDeleteSession, sources, skills, activeSessionWorkingDirectory, displayLabelConfigs, handleSessionLabelsChange, enabledModes, effectiveSessionStatuses, handleSessionSourcesChange, isAutoCompact, searchActive, searchQuery, handleChatMatchInfoChange, handleTestAutomation, handleToggleAutomation, handleDuplicateAutomation, handleDeleteAutomation, automationTestResults, getAutomationHistory, handleReplayAutomation, toggleRightSidebar, isRightSidebarOpen, rightSidebarPanel, infoPopoverOpen, focusedSessionId])
 
   // Persist expanded folders to localStorage (workspace-scoped)
   React.useEffect(() => {

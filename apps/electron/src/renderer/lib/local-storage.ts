@@ -29,6 +29,7 @@ export const KEYS = {
   // Right sidebar
   rightSidebarWidth: 'right-sidebar-width',
   rightSidebarSplitRatio: 'right-sidebar-split-ratio', // Ratio (0-1) of working directory panel height
+  infoPopoverSplitRatio: 'info-popover-split-ratio',   // Ratio (0-1) for the floating Info popover (when Preview is active)
 
   // Session files panel state
   sessionFilesExpandedFolders: 'session-files-expanded', // Expanded folders in session files tree (keyed by sessionId)
