@@ -26,7 +26,7 @@ import { Markdown } from '@craft-agent/ui'
 import { cn } from '@/lib/utils'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { useAppShellContext } from '@/context/AppShellContext'
-import { sidebarDocsAtomFamily, closeSidebarDocTab } from '@/atoms/sidebar-docs'
+import { sidebarDocsAtomFamily, closeSidebarDocTab, openSidebarDocTab } from '@/atoms/sidebar-docs'
 import { infoPopoverOpenAtom } from '@/atoms/info-popover'
 
 interface PreviewPanelProps {
@@ -51,6 +51,14 @@ function PreviewPanelContent({
   const setInfoPopoverOpen = useSetAtom(infoPopoverOpenAtom)
   const [contents, setContents] = React.useState<Record<string, { content?: string; error?: string }>>({})
   const [refreshNonce, setRefreshNonce] = React.useState(0)
+  // Per-tab scroll position memory — when the user flips between tabs and
+  // back, restore the scrollTop they left off at. Lives in a ref (not state)
+  // because changes don't need to trigger re-render; the value is consulted
+  // on tab activation and written on every scroll.
+  const scrollPositionsRef = React.useRef<Record<string, number>>({})
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+  // Drag-drop hint — visual highlight when a draggable file is over the panel.
+  const [isDragActive, setIsDragActive] = React.useState(false)
 
   const activeTab = state.activeIndex >= 0 ? state.tabs[state.activeIndex] : null
 
@@ -86,6 +94,11 @@ function PreviewPanelContent({
       }
       return next
     })
+    // Also drop scroll positions for closed tabs (mutating ref in place is
+    // fine — no render depends on this map)
+    for (const key of Object.keys(scrollPositionsRef.current)) {
+      if (!open.has(key)) delete scrollPositionsRef.current[key]
+    }
   }, [state.tabs])
 
   // ┌─────────────────────────────────────────────────────────────────────┐
@@ -152,6 +165,24 @@ function PreviewPanelContent({
     return () => window.removeEventListener('keydown', handler, true)
   }, [state.activeIndex, setState])
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Restore scroll position when (a) the active tab changes, or (b)    │
+  // │ content finishes loading. Wait for both because scrollTop can't be │
+  // │ set until the markdown DOM has populated and content is tall       │
+  // │ enough. setTimeout(0) gives React one paint tick to commit content.│
+  // └─────────────────────────────────────────────────────────────────────┘
+  const activeContent = activeTab ? contents[activeTab.filePath]?.content : undefined
+  React.useEffect(() => {
+    if (!activeTab || activeContent === undefined) return
+    const target = scrollPositionsRef.current[activeTab.filePath] ?? 0
+    const id = setTimeout(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = target
+      }
+    }, 0)
+    return () => clearTimeout(id)
+  }, [activeTab?.filePath, activeContent])
+
   const handleTabClick = React.useCallback(
     (idx: number) => {
       setState((prev) => ({ ...prev, activeIndex: idx }))
@@ -179,13 +210,62 @@ function PreviewPanelContent({
     [setState],
   )
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Drag-drop .md from Finder → new tab.                                │
+  // │ Uses electronAPI.getFilePath (webUtils.getPathForFile under the    │
+  // │ hood) to resolve the absolute OS path — File.path is gone in       │
+  // │ modern Electron. Filters to .md / .mdx / .markdown.                │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const handleDragOver = React.useCallback((e: React.DragEvent) => {
+    // Only activate the drop zone when the drag carries files
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setIsDragActive(true)
+  }, [])
+  const handleDragLeave = React.useCallback((e: React.DragEvent) => {
+    // Only clear when leaving the container itself, not its children
+    if (e.currentTarget === e.target) setIsDragActive(false)
+  }, [])
+  const handleDrop = React.useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragActive(false)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) return
+    const getPath = window.electronAPI.getFilePath
+    if (!getPath) return
+    const mdPaths: string[] = []
+    for (const f of files) {
+      if (!/\.(md|mdx|markdown)$/i.test(f.name)) continue
+      const p = getPath(f)
+      if (p) mdPaths.push(p)
+    }
+    if (mdPaths.length === 0) return
+    setState((prev) => {
+      let next = prev
+      for (const p of mdPaths) {
+        next = openSidebarDocTab(next, p)
+      }
+      return next
+    })
+  }, [setState])
+
   const entry = activeTab ? contents[activeTab.filePath] : undefined
   const isLoading = activeTab && !entry
   const content = entry?.content ?? ''
   const error = entry?.error
 
   return (
-    <div className="h-full flex flex-col" data-right-sidebar-preview>
+    <div
+      className={cn(
+        'h-full flex flex-col relative',
+        isDragActive && 'after:absolute after:inset-1 after:rounded-[8px] after:border-2 after:border-dashed after:border-accent/60 after:bg-accent/5 after:pointer-events-none',
+      )}
+      data-right-sidebar-preview
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-3 h-10 shrink-0 border-b border-border/50">
         <div className="flex items-center gap-1.5">
@@ -253,7 +333,14 @@ function PreviewPanelContent({
       )}
 
       {/* Content / empty state */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div
+        ref={scrollContainerRef}
+        onScroll={(e) => {
+          if (!activeTab) return
+          scrollPositionsRef.current[activeTab.filePath] = e.currentTarget.scrollTop
+        }}
+        className="flex-1 min-h-0 overflow-y-auto"
+      >
         {!activeTab && (
           <div className="h-full flex items-center justify-center px-6 text-center">
             <div>
