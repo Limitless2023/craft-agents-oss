@@ -601,6 +601,18 @@ function AppShellContent({
   const [rightSidebarWidth, setRightSidebarWidth] = React.useState(() =>
     storage.get(storage.KEYS.rightSidebarWidth, 240)
   )
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Clamp width when switching panel types. Preview gets a wider max    │
+  // │ (700px) so markdown is readable; Info / others stay at 480. If the  │
+  // │ user drags Preview to 600 then flips to Info, snap back to 480.    │
+  // └─────────────────────────────────────────────────────────────────────┘
+  React.useEffect(() => {
+    const maxForPanel = rightSidebarPanel?.type === 'preview' ? 700 : 480
+    if (rightSidebarWidth > maxForPanel) {
+      setRightSidebarWidth(maxForPanel)
+      storage.set(storage.KEYS.rightSidebarWidth, maxForPanel)
+    }
+  }, [rightSidebarPanel?.type, rightSidebarWidth])
 
   const store = useStore()
   const panelStack = useAtomValue(panelStackAtom)
@@ -1257,8 +1269,16 @@ function AppShellContent({
           setSessionListHandleY(e.clientY - rect.top)
         }
       } else if (isResizing === 'right-sidebar') {
-        // Right sidebar resizes from the right edge inward
-        const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 180), 480)
+        // Right sidebar resizes from the right edge inward.
+        // The Preview panel renders markdown content so allow a wider max
+        // (700px ≈ comfortable reading column). Other panels are file trees
+        // / lists that don't benefit from extra width — keep them at 480.
+        // Use half the window width as an absolute upper bound so the chat
+        // can never be squeezed below ~50%.
+        const maxWidth = rightSidebarPanel?.type === 'preview'
+          ? Math.min(700, Math.floor(window.innerWidth * 0.5))
+          : 480
+        const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 180), maxWidth)
         setRightSidebarWidth(newWidth)
         if (rightSidebarHandleRef.current) {
           const rect = rightSidebarHandleRef.current.getBoundingClientRect()
@@ -1294,6 +1314,7 @@ function AppShellContent({
     sessionListWidth,
     rightSidebarWidth,
     isSidebarVisible,
+    rightSidebarPanel,
   ])
 
   // Spring transition config - shared between sidebar and header
