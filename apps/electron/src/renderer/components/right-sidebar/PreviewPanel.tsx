@@ -21,8 +21,9 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { useAtom } from 'jotai'
-import { FileText, X, RotateCw, FolderSearch, Maximize2 } from 'lucide-react'
-import { Markdown } from '@craft-agent/ui'
+import { FileText, X, RotateCw, FolderSearch, Maximize2, GitCompare } from 'lucide-react'
+import { createPatch } from 'diff'
+import { Markdown, UnifiedDiffViewer } from '@craft-agent/ui'
 import { cn } from '@/lib/utils'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { useAppShellContext } from '@/context/AppShellContext'
@@ -49,7 +50,14 @@ function PreviewPanelContent({
   const [state, setState] = useAtom(sidebarDocsAtomFamily(sessionId))
   const { onOpenFile } = useAppShellContext()
   const setInfoPopoverOpen = useSetAtom(infoPopoverOpenAtom)
-  const [contents, setContents] = React.useState<Record<string, { content?: string; error?: string }>>({})
+  // Per-tab content cache. `previous` carries the version before the most
+  // recent change (set by the auto-refresh poll). When present, the user
+  // can toggle a diff view that compares previous vs current.
+  const [contents, setContents] = React.useState<Record<string, { content?: string; previous?: string; error?: string }>>({})
+  // Whether the active tab is currently rendered as a diff (toggled via
+  // the GitCompare icon in the header). Keyed by filePath so flipping
+  // tabs preserves each tab's mode independently.
+  const [diffViewForPath, setDiffViewForPath] = React.useState<Record<string, boolean>>({})
   const [refreshNonce, setRefreshNonce] = React.useState(0)
   // Per-tab scroll position memory — when the user flips between tabs and
   // back, restore the scrollTop they left off at. Lives in a ref (not state)
@@ -99,6 +107,14 @@ function PreviewPanelContent({
     for (const key of Object.keys(scrollPositionsRef.current)) {
       if (!open.has(key)) delete scrollPositionsRef.current[key]
     }
+    // And drop diff-mode flags for closed tabs
+    setDiffViewForPath((prev) => {
+      const next: typeof prev = {}
+      for (const [k, v] of Object.entries(prev)) {
+        if (open.has(k)) next[k] = v
+      }
+      return next
+    })
   }, [state.tabs])
 
   // ┌─────────────────────────────────────────────────────────────────────┐
@@ -124,7 +140,12 @@ function PreviewPanelContent({
         setContents((prev) => {
           const existing = prev[filePath]
           if (existing && existing.content === next && !existing.error) return prev
-          return { ...prev, [filePath]: { content: next } }
+          // Stash the just-replaced version as `previous` so the user can
+          // diff against it. Only update `previous` when content actually
+          // changes — repeated polls of an unchanged file shouldn't lose
+          // the "previous" pointer the user might want to compare with.
+          const previous = existing?.content
+          return { ...prev, [filePath]: { content: next, previous } }
         })
       } catch {
         // Silent: the file may be momentarily missing during writes / renames.
@@ -253,7 +274,24 @@ function PreviewPanelContent({
   const entry = activeTab ? contents[activeTab.filePath] : undefined
   const isLoading = activeTab && !entry
   const content = entry?.content ?? ''
+  const previous = entry?.previous
   const error = entry?.error
+  const hasDiffAvailable = activeTab && previous !== undefined && previous !== content
+  const showDiff = activeTab ? !!diffViewForPath[activeTab.filePath] : false
+
+  const toggleDiffView = React.useCallback(() => {
+    if (!activeTab) return
+    setDiffViewForPath((m) => ({ ...m, [activeTab.filePath]: !m[activeTab.filePath] }))
+  }, [activeTab])
+
+  // Pre-compute the unified diff for the active tab when diff mode is on.
+  // createPatch generates the standard `--- / +++ / @@` format
+  // UnifiedDiffViewer expects.
+  const unifiedDiff = React.useMemo(() => {
+    if (!activeTab || !hasDiffAvailable || previous === undefined) return ''
+    const name = activeTab.filePath.split('/').pop() ?? activeTab.filePath
+    return createPatch(name, previous, content, 'previous', 'current')
+  }, [activeTab, hasDiffAvailable, previous, content])
 
   return (
     <div
@@ -275,6 +313,19 @@ function PreviewPanelContent({
         <div className="flex items-center gap-1">
           {activeTab && (
             <>
+              {/* Diff toggle — only meaningful when we have a prior version
+                 captured (i.e., the file changed since you opened the tab). */}
+              {hasDiffAvailable && (
+                <button
+                  onClick={toggleDiffView}
+                  className={`p-1 rounded-[6px] transition-colors ${
+                    showDiff ? 'text-foreground bg-foreground/10' : 'text-muted-foreground/50 hover:text-foreground'
+                  }`}
+                  title={showDiff ? 'Show rendered markdown' : 'Show changes vs previous version'}
+                >
+                  <GitCompare className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 onClick={() => setRefreshNonce((n) => n + 1)}
                 className="p-1 rounded-[6px] transition-colors text-muted-foreground/50 hover:text-foreground"
@@ -380,7 +431,7 @@ function PreviewPanelContent({
                 {error}
               </div>
             )}
-            {!isLoading && (
+            {!isLoading && !showDiff && (
               <div className="text-sm">
                 <Markdown
                   mode="minimal"
@@ -390,6 +441,19 @@ function PreviewPanelContent({
                 >
                   {content}
                 </Markdown>
+              </div>
+            )}
+            {!isLoading && showDiff && unifiedDiff && (
+              // Unified diff renderer expects the standard --- / +++ / @@
+              // format; createPatch produces exactly that. Suppress its
+              // built-in file header (we already show filename in the tab).
+              <div className="text-xs">
+                <UnifiedDiffViewer
+                  unifiedDiff={unifiedDiff}
+                  filePath={activeTab?.filePath}
+                  diffStyle="unified"
+                  disableFileHeader
+                />
               </div>
             )}
           </div>

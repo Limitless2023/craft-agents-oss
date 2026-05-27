@@ -322,6 +322,13 @@ export interface ElectronAPI {
   // Server filesystem browsing (remote mode)
   listServerDirectory(dirPath: string): Promise<DirectoryListingResult>
   listFiles(dirPath: string): Promise<{ path: string; items: Array<{ name: string; path: string; type: 'file' | 'directory'; size?: number }> }>
+  /**
+   * Get git porcelain status for files under `dirPath`. Returns a map of
+   * absolute path → single-char summary: M/A/D/R for tracked changes, ?
+   * for untracked. Empty map when `dirPath` is not inside a git work tree
+   * or git is unavailable.
+   */
+  gitStatus(dirPath: string): Promise<Record<string, string>>
   // Debug: send renderer logs to main process log file
   debugLog(...args: unknown[]): void
 

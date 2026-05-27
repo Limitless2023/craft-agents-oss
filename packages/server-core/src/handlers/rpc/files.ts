@@ -28,6 +28,7 @@ export const HANDLED_CHANNELS = [
   RPC_CHANNELS.fs.SEARCH,
   RPC_CHANNELS.fs.LIST_DIRECTORY,
   RPC_CHANNELS.fs.LIST_FILES,
+  RPC_CHANNELS.fs.GIT_STATUS,
 ] as const
 
 export function registerFilesHandlers(server: RpcServer, deps: HandlerDeps): void {
@@ -653,5 +654,72 @@ export function registerFilesHandlers(server: RpcServer, deps: HandlerDeps): voi
     })
 
     return { path: resolved, items: items.slice(0, 500) }
+  })
+
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ fs:gitStatus — return git porcelain status as a map keyed by       │
+  // │ absolute path. The renderer overlays colored dots on file tree    │
+  // │ nodes so the user can see at a glance which files have changed.   │
+  // │ Returns empty map if `dirPath` isn't inside a git work tree, or   │
+  // │ if `git` isn't installed / the spawn fails for any reason — the   │
+  // │ feature is best-effort and silent on failure.                     │
+  // └─────────────────────────────────────────────────────────────────────┘
+  server.handle(RPC_CHANNELS.fs.GIT_STATUS, async (_ctx, dirPath: string) => {
+    if (dirPath === '~' || dirPath.startsWith('~/')) {
+      dirPath = dirPath === '~' ? homedir() : join(homedir(), dirPath.slice(2))
+    }
+    const pathCheck = validatePathFormat(dirPath)
+    if (!pathCheck.valid) return {}
+    const resolved = resolve(dirPath)
+
+    const { execFile } = await import('child_process')
+    // 1) locate the work tree root so the porcelain paths are anchored
+    // somewhere we can prepend to get absolutes. `rev-parse --show-toplevel`
+    // returns the abs path or fails fast if cwd isn't in a repo.
+    const root = await new Promise<string | null>((res) => {
+      execFile('git', ['rev-parse', '--show-toplevel'], { cwd: resolved, timeout: 2000 }, (err, stdout) => {
+        if (err) return res(null)
+        res(stdout.trim())
+      })
+    })
+    if (!root) return {}
+
+    // 2) porcelain v1: each line is `XY <path>` (or `XY <old> -> <new>`
+    // for renames). X = index status, Y = worktree status. Combine the two
+    // chars and let the renderer pick the most relevant — for our coarse
+    // dot we just need *some* indicator that the file differs.
+    const lines = await new Promise<string[]>((res) => {
+      execFile('git', ['status', '--porcelain=v1', '-z'], { cwd: root, timeout: 3000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+        if (err) return res([])
+        // -z separator: each entry NUL-terminated. Rename entries are two
+        // NUL-separated paths (new then old) so we have to thread carefully.
+        const parts = stdout.split('\0').filter(Boolean)
+        res(parts)
+      })
+    })
+
+    const statusMap: Record<string, string> = {}
+    let i = 0
+    while (i < lines.length) {
+      const line = lines[i]
+      const code = line.slice(0, 2)
+      const path = line.slice(3) // 2 status chars + 1 space + path
+      const abs = join(root, path)
+      // Map two-char code to a single dominant status the renderer cares
+      // about: M (modified), A (added/staged), D (deleted), R (renamed),
+      // ?? (untracked). Anything else falls back to 'M'.
+      let summary: string
+      if (code === '??') summary = '?'
+      else if (code.includes('A')) summary = 'A'
+      else if (code.includes('D')) summary = 'D'
+      else if (code.includes('R')) summary = 'R'
+      else summary = 'M'
+      statusMap[abs] = summary
+      // Renames carry a second NUL-terminated "old path" we skip.
+      if (code.startsWith('R') || code.startsWith('C')) i += 2
+      else i += 1
+    }
+
+    return statusMap
   })
 }

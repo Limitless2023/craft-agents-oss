@@ -34,6 +34,39 @@ interface TreeNodeProps {
   depth: number
   onFileClick: (path: string) => void
   onOpenInSidebar?: (path: string) => void
+  /** Map of absolute file path → single-char git status (M/A/D/R/?). */
+  gitStatus?: Record<string, string>
+}
+
+// ┌─────────────────────────────────────────────────────────────────────┐
+// │ Git status dot — small colored circle after the filename.           │
+// │   M (modified)    yellow-amber                                       │
+// │   A (added)       green                                              │
+// │   D (deleted)     red                                                │
+// │   R (renamed)     blue                                               │
+// │   ? (untracked)   gray                                               │
+// └─────────────────────────────────────────────────────────────────────┘
+function GitStatusDot({ status }: { status: string }) {
+  const colorClass =
+    status === 'M' ? 'bg-amber-500' :
+    status === 'A' ? 'bg-emerald-500' :
+    status === 'D' ? 'bg-rose-500' :
+    status === 'R' ? 'bg-sky-500' :
+    status === '?' ? 'bg-muted-foreground/50' :
+    'bg-muted-foreground/40'
+  return (
+    <span
+      className={cn('inline-block w-1.5 h-1.5 rounded-full shrink-0', colorClass)}
+      title={
+        status === 'M' ? 'Modified' :
+        status === 'A' ? 'Added' :
+        status === 'D' ? 'Deleted' :
+        status === 'R' ? 'Renamed' :
+        status === '?' ? 'Untracked' :
+        'Changed'
+      }
+    />
+  )
 }
 
 function getIcon(entry: FileEntry, isExpanded: boolean) {
@@ -48,7 +81,7 @@ function getIcon(entry: FileEntry, isExpanded: boolean) {
   return <File className={cls} />
 }
 
-const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenInSidebar }: TreeNodeProps) {
+const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenInSidebar, gitStatus }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [children, setChildren] = useState<FileEntry[] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -95,7 +128,10 @@ const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenInSid
       )}
       {entry.type !== 'directory' && <span className="w-3 shrink-0" />}
       {getIcon(entry, isExpanded)}
-      <span className="truncate">{entry.name}</span>
+      <span className="truncate flex-1 min-w-0">{entry.name}</span>
+      {entry.type === 'file' && gitStatus?.[entry.path] && (
+        <GitStatusDot status={gitStatus[entry.path]} />
+      )}
     </button>
   )
 
@@ -140,6 +176,7 @@ const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenInSid
               depth={depth + 1}
               onFileClick={onFileClick}
               onOpenInSidebar={onOpenInSidebar}
+              gitStatus={gitStatus}
             />
           ))}
         </div>
@@ -158,6 +195,10 @@ interface WorkingDirectoryTreeProps {
 export function WorkingDirectoryTree({ dirPath, filterQuery, refreshToken }: WorkingDirectoryTreeProps) {
   const [items, setItems] = React.useState<FileEntry[] | null>(null)
   const [isLoading, setIsLoading] = React.useState(false)
+  // Git status map (absolute path → M/A/D/R/?). Empty when cwd isn't a git
+  // work tree. Pulled alongside the file list on each poll/refresh so the
+  // dots stay in sync with the tree contents.
+  const [gitStatus, setGitStatus] = React.useState<Record<string, string>>({})
   const { onOpenFile } = useAppShellContext()
   const mountedRef = useRef(true)
 
@@ -166,6 +207,12 @@ export function WorkingDirectoryTree({ dirPath, filterQuery, refreshToken }: Wor
       if (mountedRef.current) setItems(result.items)
     }).catch(() => {
       if (mountedRef.current) setItems([])
+    })
+    // git status is best-effort; failure → empty map, dots disappear
+    window.electronAPI.gitStatus(dirPath).then((status) => {
+      if (mountedRef.current) setGitStatus(status)
+    }).catch(() => {
+      if (mountedRef.current) setGitStatus({})
     })
   }, [dirPath])
 
@@ -177,6 +224,12 @@ export function WorkingDirectoryTree({ dirPath, filterQuery, refreshToken }: Wor
       if (mountedRef.current) { setItems(result.items); setIsLoading(false) }
     }).catch(() => {
       if (mountedRef.current) { setItems([]); setIsLoading(false) }
+    })
+    // Fetch git status alongside; safe to fire-and-forget. Empty if not a repo.
+    window.electronAPI.gitStatus(dirPath).then((status) => {
+      if (mountedRef.current) setGitStatus(status)
+    }).catch(() => {
+      if (mountedRef.current) setGitStatus({})
     })
     return () => { mountedRef.current = false }
   }, [dirPath])
@@ -238,6 +291,7 @@ export function WorkingDirectoryTree({ dirPath, filterQuery, refreshToken }: Wor
           depth={0}
           onFileClick={handleFileClick}
           onOpenInSidebar={handleOpenInSidebar}
+          gitStatus={gitStatus}
         />
       ))}
     </nav>
