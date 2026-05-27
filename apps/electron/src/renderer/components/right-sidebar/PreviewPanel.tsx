@@ -197,7 +197,9 @@ function PreviewPanelContent({
           </div>
         )}
         {activeTab && (
-          <div className="px-3 py-2">
+          // px-6 py-4 — more breathing room for prose at sidebar widths up to
+          // 700px. Matches the comfortable reading-margin of in-app overlays.
+          <div className="px-6 py-4">
             {isLoading && (
               <div className="text-xs text-muted-foreground/60 italic">Loading…</div>
             )}

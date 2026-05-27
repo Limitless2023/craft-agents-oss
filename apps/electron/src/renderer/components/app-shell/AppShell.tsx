@@ -1634,8 +1634,10 @@ function AppShellContent({
       // │ panel). Active state highlights whichever panel is currently  │
       // │ open. Clicking the active one closes the sidebar; clicking    │
       // │ the other switches to it (mutually exclusive).                │
+      // │ Use React.Fragment so PanelSlot's gap-1.5 spaces these the    │
+      // │ same as the close (X) button — no nested gap-0.5 cluster.    │
       // └───────────────────────────────────────────────────────────────┘
-      <div className="flex items-center gap-0.5">
+      <>
         <PanelHeaderCenterButton
           icon={<BookOpen className="h-4 w-4" />}
           onClick={() => toggleRightSidebar({ type: 'docs' })}
@@ -1648,7 +1650,7 @@ function AppShellContent({
           tooltip="Preview"
           className={rightSidebarPanel?.type === 'preview' ? 'opacity-100' : undefined}
         />
-      </div>
+      </>
     ),
     isCompactMode: isAutoCompact,
     // Search state for ChatDisplay highlighting
