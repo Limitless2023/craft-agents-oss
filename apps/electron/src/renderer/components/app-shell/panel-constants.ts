@@ -24,7 +24,10 @@ export const PANEL_STACK_VERTICAL_OVERFLOW = 8
  * Keep all seams (sidebar, navigator/content, panel/panel) aligned by deriving
  * offsets from these constants instead of hardcoded pixel literals.
  */
-export const PANEL_SASH_HIT_WIDTH = 8
+// 14 px gives ~7 px of grab zone on each side of the visible seam. The
+// previous 8 px (4 px each side) was easy to miss — modern IDEs use 12-16 px
+// for resize handles. Visible line stays 2 px so the look is unchanged.
+export const PANEL_SASH_HIT_WIDTH = 14
 export const PANEL_SASH_LINE_WIDTH = 2
 
 /**
