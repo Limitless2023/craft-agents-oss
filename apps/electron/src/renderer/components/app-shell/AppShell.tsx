@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useTranslation, Trans } from "react-i18next"
 import { useRef, useState, useEffect, useCallback, useMemo } from "react"
-import { useAtomValue, useStore } from "jotai"
+import { useAtom, useAtomValue, useStore } from "jotai"
 import { motion, AnimatePresence } from "motion/react"
 import {
   Archive,
@@ -78,6 +78,7 @@ import { RightSidebar } from "./RightSidebar"
 import { PanelHeaderCenterButton } from "@/components/ui/PanelHeaderCenterButton"
 import { InfoPopover } from "../right-sidebar/InfoPopover"
 import { sidebarDocsAtomFamily } from "@/atoms/sidebar-docs"
+import { infoPopoverOpenAtom } from "@/atoms/info-popover"
 import { CompactSessionListFilter } from "./CompactSessionListFilter"
 import type { ChatDisplayHandle } from "./ChatDisplay"
 import { LeftSidebar } from "./LeftSidebar"
@@ -609,19 +610,33 @@ function AppShellContent({
   // │ instead of switching the sidebar, so the user can pick another .md │
   // │ to open without losing the Preview view they're currently reading.  │
   // └─────────────────────────────────────────────────────────────────────┘
-  const [infoPopoverOpen, setInfoPopoverOpen] = React.useState(false)
+  const [infoPopoverOpen, setInfoPopoverOpen] = useAtom(infoPopoverOpenAtom)
   // Auto-close wiring lives just after focusedSessionId is read (a few lines
   // below) — see the [InfoPopover auto-close] block.
   // ┌─────────────────────────────────────────────────────────────────────┐
-  // │ Clamp width when switching panel types. Preview gets a wider max    │
-  // │ (700px) so markdown is readable; Info / others stay at 480. If the  │
-  // │ user drags Preview to 600 then flips to Info, snap back to 480.    │
+  // │ Adjust sidebar width on panel type change.                          │
+  // │   - Switching INTO Preview: if the current width is below 500px    │
+  // │     (the user hasn't widened the sidebar yet), auto-bump to 520px  │
+  // │     so the markdown is immediately readable. We don't ALWAYS jump  │
+  // │     to 520 — if the user previously dragged Preview to 650, we     │
+  // │     respect that.                                                  │
+  // │   - Switching OUT of Preview: clamp width to 480 max so panels    │
+  // │     that don't benefit from extra width (Info file tree) don't    │
+  // │     keep a 600px-wide sidebar around.                             │
   // └─────────────────────────────────────────────────────────────────────┘
+  const PREVIEW_DEFAULT_WIDTH = 520
+  const PREVIEW_AUTO_BUMP_THRESHOLD = 500
   React.useEffect(() => {
-    const maxForPanel = rightSidebarPanel?.type === 'preview' ? 700 : 480
-    if (rightSidebarWidth > maxForPanel) {
-      setRightSidebarWidth(maxForPanel)
-      storage.set(storage.KEYS.rightSidebarWidth, maxForPanel)
+    const isPreview = rightSidebarPanel?.type === 'preview'
+    if (isPreview) {
+      if (rightSidebarWidth < PREVIEW_AUTO_BUMP_THRESHOLD) {
+        setRightSidebarWidth(PREVIEW_DEFAULT_WIDTH)
+        storage.set(storage.KEYS.rightSidebarWidth, PREVIEW_DEFAULT_WIDTH)
+      }
+      // No upper clamp for preview here — handled live during drag below.
+    } else if (rightSidebarWidth > 480) {
+      setRightSidebarWidth(480)
+      storage.set(storage.KEYS.rightSidebarWidth, 480)
     }
   }, [rightSidebarPanel?.type, rightSidebarWidth])
 
@@ -1677,7 +1692,7 @@ function AppShellContent({
             trigger={
               <PanelHeaderCenterButton
                 icon={<BookOpen className="h-4 w-4" />}
-                onClick={() => setInfoPopoverOpen((v) => !v)}
+                onClick={() => setInfoPopoverOpen((v: boolean) => !v)}
                 tooltip="Browse files"
                 className={infoPopoverOpen ? 'opacity-100' : undefined}
               />

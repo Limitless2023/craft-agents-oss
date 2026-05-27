@@ -19,14 +19,15 @@
  */
 
 import * as React from 'react'
-import { useAtomValue } from 'jotai'
+import { useAtomValue, useSetAtom } from 'jotai'
 import { useAtom } from 'jotai'
-import { FileText, X, RotateCw } from 'lucide-react'
+import { FileText, X, RotateCw, FolderSearch } from 'lucide-react'
 import { Markdown } from '@craft-agent/ui'
 import { cn } from '@/lib/utils'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { useAppShellContext } from '@/context/AppShellContext'
 import { sidebarDocsAtomFamily, closeSidebarDocTab } from '@/atoms/sidebar-docs'
+import { infoPopoverOpenAtom } from '@/atoms/info-popover'
 
 interface PreviewPanelProps {
   closeButton?: React.ReactNode
@@ -47,6 +48,7 @@ function PreviewPanelContent({
 }) {
   const [state, setState] = useAtom(sidebarDocsAtomFamily(sessionId))
   const { onOpenFile } = useAppShellContext()
+  const setInfoPopoverOpen = useSetAtom(infoPopoverOpenAtom)
   const [contents, setContents] = React.useState<Record<string, { content?: string; error?: string }>>({})
   const [refreshNonce, setRefreshNonce] = React.useState(0)
 
@@ -87,27 +89,32 @@ function PreviewPanelContent({
   }, [state.tabs])
 
   // ┌─────────────────────────────────────────────────────────────────────┐
-  // │ ⌘R refreshes the active tab while this panel is mounted.           │
-  // │ Scoped via data-right-sidebar-preview attribute on the container so │
-  // │ the global ⌘R from useLinkInterceptor (for the overlay) doesn't    │
-  // │ collide — the listener here only fires when the panel is visible.  │
+  // │ Keyboard shortcuts while the panel is mounted:                      │
+  // │   ⌘R / Ctrl+R → refresh active tab                                  │
+  // │   ⌘W / Ctrl+W → close active tab (skipped if there's no tab)        │
+  // │ Both preventDefault to avoid the Electron menu accelerators in dev  │
+  // │ mode (reload / close window).                                       │
   // └─────────────────────────────────────────────────────────────────────┘
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (
-        (e.metaKey || e.ctrlKey) &&
-        !e.shiftKey &&
-        !e.altKey &&
-        (e.key === 'r' || e.key === 'R')
-      ) {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return
+      const key = e.key.toLowerCase()
+      if (key === 'r') {
         e.preventDefault()
         e.stopPropagation()
         setRefreshNonce((n) => n + 1)
+      } else if (key === 'w') {
+        // Close current tab only when one exists — otherwise let the keystroke
+        // fall through so the user can close the window/panel as expected.
+        if (state.activeIndex < 0) return
+        e.preventDefault()
+        e.stopPropagation()
+        setState((prev) => closeSidebarDocTab(prev, prev.activeIndex))
       }
     }
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
-  }, [])
+  }, [state.activeIndex, setState])
 
   const handleTabClick = React.useCallback(
     (idx: number) => {
@@ -118,6 +125,18 @@ function PreviewPanelContent({
 
   const handleClose = React.useCallback(
     (idx: number) => (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setState((prev) => closeSidebarDocTab(prev, idx))
+    },
+    [setState],
+  )
+
+  // Middle-click on a tab closes it — browser tab convention.
+  // `auxClick` fires reliably for non-primary buttons (1 = middle).
+  const handleAuxClick = React.useCallback(
+    (idx: number) => (e: React.MouseEvent) => {
+      if (e.button !== 1) return
+      e.preventDefault()
       e.stopPropagation()
       setState((prev) => closeSidebarDocTab(prev, idx))
     },
@@ -160,6 +179,7 @@ function PreviewPanelContent({
               <button
                 key={tab.filePath}
                 onClick={() => handleTabClick(idx)}
+                onAuxClick={handleAuxClick(idx)}
                 title={tab.filePath}
                 className={cn(
                   'group relative flex items-center gap-1 px-2 py-1 rounded-t-[6px] text-[12px] shrink-0 max-w-[140px] transition-colors',
@@ -189,16 +209,32 @@ function PreviewPanelContent({
           <div className="h-full flex items-center justify-center px-6 text-center">
             <div>
               <FileText className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
-              <p className="text-xs text-muted-foreground/60">
-                Right-click any <span className="font-mono">.md</span> file in the file tree
-                <br />and choose <em>"Open in sidebar"</em> to preview it here.
+              <p className="text-xs text-muted-foreground/60 mb-3">
+                Pick an <span className="font-mono">.md</span> file to preview it here.
+              </p>
+              {/* One-click entry to the floating Info popover so the user doesn't
+                 have to backtrack through the toolbar on first use. */}
+              <button
+                onClick={() => setInfoPopoverOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-[12px] bg-foreground/[0.06] hover:bg-foreground/[0.1] text-foreground/80 hover:text-foreground transition-colors"
+              >
+                <FolderSearch className="w-3.5 h-3.5" />
+                Browse files
+              </button>
+              <p className="text-[10px] text-muted-foreground/40 mt-3">
+                Or right-click any <span className="font-mono">.md</span> in the file tree
+                <br />and choose <em>"Open in sidebar"</em>.
               </p>
             </div>
           </div>
         )}
         {activeTab && (
-          // px-6 py-4 — more breathing room for prose at sidebar widths up to
-          // 700px. Matches the comfortable reading-margin of in-app overlays.
+          // px-6 py-4 — comfortable reading margin at sidebar widths up to 700px.
+          // Styling matches DocumentFormattedMarkdownOverlay: `text-sm` wrapper
+          // + Markdown `mode="minimal"`, NO Tailwind prose layer (the overlay
+          // doesn't use prose either, and adding it changes heading sizes
+          // / list spacing in ways that don't match what the user sees in
+          // the full-screen view). Keep the two surfaces visually identical.
           <div className="px-6 py-4">
             {isLoading && (
               <div className="text-xs text-muted-foreground/60 italic">Loading…</div>
@@ -209,11 +245,12 @@ function PreviewPanelContent({
               </div>
             )}
             {!isLoading && (
-              <div className="prose prose-sm dark:prose-invert max-w-none text-[13px]">
+              <div className="text-sm">
                 <Markdown
-                  mode="full"
+                  mode="minimal"
                   onFileClick={onOpenFile}
                   onUrlClick={(url) => window.electronAPI.openUrl(url)}
+                  hideFirstMermaidExpand={false}
                 >
                   {content}
                 </Markdown>

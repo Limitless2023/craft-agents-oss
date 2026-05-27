@@ -30,9 +30,52 @@ export interface SidebarDocsState {
 
 const EMPTY_STATE: SidebarDocsState = { tabs: [], activeIndex: -1 }
 
-export const sidebarDocsAtomFamily = atomFamily((_sessionId: string) =>
-  atom<SidebarDocsState>(EMPTY_STATE),
-)
+const STORAGE_KEY_PREFIX = 'craft-sidebar-docs:'
+
+/** Read persisted tabs for a session from localStorage. Falls back silently. */
+function loadPersisted(sessionId: string): SidebarDocsState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PREFIX + sessionId)
+    if (!raw) return EMPTY_STATE
+    const parsed = JSON.parse(raw) as SidebarDocsState
+    // Defensive shape check — corrupt entries shouldn't crash the panel
+    if (!Array.isArray(parsed.tabs) || typeof parsed.activeIndex !== 'number') return EMPTY_STATE
+    return parsed
+  } catch {
+    return EMPTY_STATE
+  }
+}
+
+/** Persist tabs for a session. No-op on storage errors (e.g. quota exceeded). */
+function persistState(sessionId: string, state: SidebarDocsState): void {
+  try {
+    if (state.tabs.length === 0) {
+      localStorage.removeItem(STORAGE_KEY_PREFIX + sessionId)
+    } else {
+      localStorage.setItem(STORAGE_KEY_PREFIX + sessionId, JSON.stringify(state))
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// ┌─────────────────────────────────────────────────────────────────────┐
+// │ atomFamily — per-session sidebar docs state with localStorage sync. │
+// │ Hydrates from storage on first read; writes back on every change.  │
+// │ Storage key is `craft-sidebar-docs:<sessionId>`.                    │
+// └─────────────────────────────────────────────────────────────────────┘
+export const sidebarDocsAtomFamily = atomFamily((sessionId: string) => {
+  const baseAtom = atom<SidebarDocsState>(loadPersisted(sessionId))
+  return atom(
+    (get) => get(baseAtom),
+    (get, set, update: SidebarDocsState | ((prev: SidebarDocsState) => SidebarDocsState)) => {
+      const prev = get(baseAtom)
+      const next = typeof update === 'function' ? update(prev) : update
+      set(baseAtom, next)
+      persistState(sessionId, next)
+    },
+  )
+})
 
 /**
  * Open a doc as a tab. If the same filePath is already open, switch to it
