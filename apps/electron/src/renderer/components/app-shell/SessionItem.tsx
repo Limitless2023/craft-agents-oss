@@ -136,6 +136,8 @@ export function SessionItem({
           onSendToWorkspace={ctx.onSendToWorkspace ? () => ctx.onSendToWorkspace!([item.id]) : undefined}
           hasRemoteWorkspaces={hasRemoteWorkspaces}
           onDelete={() => ctx.onDelete(item.id)}
+          onTogglePin={ctx.onTogglePin ? () => ctx.onTogglePin!(item.id) : undefined}
+          isPinned={ctx.pinnedSessionIds?.has(item.id) ?? false}
         />
       }
       contextMenuContent={ctx.isMultiSelectActive && isInMultiSelect ? <BatchSessionMenu /> : undefined}

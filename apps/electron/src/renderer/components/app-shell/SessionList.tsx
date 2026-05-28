@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { useTranslation } from "react-i18next"
-import { useSetAtom } from "jotai"
+import { useSetAtom, useAtom } from "jotai"
+import { pinnedSessionsAtomFamily, togglePinnedSession } from "@/atoms/pinned-sessions"
 import { isToday, isYesterday, format, startOfDay } from "date-fns"
 import { getDateLocale } from "@craft-agent/shared/i18n"
 import { useAction } from "@/actions"
@@ -258,6 +259,14 @@ export function SessionList({
     scrollViewportRef,
   })
 
+  // Pinned-session state (per-workspace, localStorage-backed). Used by both
+  // the row grouping logic below and the SessionListContext value further
+  // down so individual SessionItem rows can drive the menu toggle.
+  const [pinnedSessionIds, setPinnedSessionIds] = useAtom(pinnedSessionsAtomFamily(workspaceId ?? '__none__'))
+  const handleTogglePin = useCallback((sessionId: string) => {
+    setPinnedSessionIds((prev) => togglePinnedSession(prev, sessionId))
+  }, [setPinnedSessionIds])
+
   const rowData = useMemo(() => {
     if (isSearchMode) {
       const matchingRows: SessionListRow[] = matchingFilterItems.map(item => ({ item }))
@@ -282,6 +291,38 @@ export function SessionList({
     // can insert header-only placeholder groups in the correct position.
     const rows: SessionListRow[] = flatItems.map(item => ({ item }))
 
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │ Pin extraction — pulled out FIRST so pinned items don't double-    │
+    // │ appear in their original date/status bucket. Skipped during search │
+    // │ (already handled above) since search has its own grouping.         │
+    // │ The "Pinned" group renders only when at least one pin survives the │
+    // │ current filter — otherwise it's just visual noise.                  │
+    // └─────────────────────────────────────────────────────────────────────┘
+    const pinnedRows: SessionListRow[] = []
+    const nonPinnedRows: SessionListRow[] = []
+    for (const row of rows) {
+      if (pinnedSessionIds.has(row.item.id)) pinnedRows.push(row)
+      else nonPinnedRows.push(row)
+    }
+    pinnedRows.sort((a, b) => (b.item.lastMessageAt || 0) - (a.item.lastMessageAt || 0))
+    // Replace `rows` with the non-pinned slice so the rest of this function
+    // (which groups by date/status/unread) doesn't see pinned items.
+    const remainingRows = nonPinnedRows
+
+    /** Prepend the Pinned group if any pinned rows exist for this view. */
+    const withPinned = (groups: EntityListGroup<SessionListRow>[]): EntityListGroup<SessionListRow>[] => {
+      if (pinnedRows.length === 0) return groups
+      return [
+        {
+          key: 'pinned',
+          label: `Pinned (${pinnedRows.length})`,
+          items: pinnedRows,
+          collapsible: true,
+        },
+        ...groups,
+      ]
+    }
+
     if (groupingMode === 'unread') {
       // Two fixed buckets: unread on top, read below. Within each, items keep
       // the same `lastMessageAt`-descending order they already arrive in.
@@ -290,7 +331,7 @@ export function SessionList({
       // bucket is unambiguous (e.g. "Unread (0)").
       const unreadRows: SessionListRow[] = []
       const readRows: SessionListRow[] = []
-      for (const row of rows) {
+      for (const row of remainingRows) {
         if (row.item.hasUnread) unreadRows.push(row)
         else readRows.push(row)
       }
@@ -323,9 +364,10 @@ export function SessionList({
         },
       ]
 
+      const finalGroups = withPinned(orderedGroups)
       return {
-        rows: orderedGroups.flatMap(g => g.items),
-        groups: orderedGroups,
+        rows: finalGroups.flatMap(g => g.items),
+        groups: finalGroups,
       }
     }
 
@@ -335,7 +377,7 @@ export function SessionList({
 
       // Build groups from visible items
       const groupsByKey = new Map<string, { rows: SessionListRow[], statusId: string }>()
-      for (const row of rows) {
+      for (const row of remainingRows) {
         const statusId = getSessionStatus(row.item)
         const key = `status-${statusId}`
         if (!groupsByKey.has(key)) groupsByKey.set(key, { rows: [], statusId })
@@ -375,9 +417,10 @@ export function SessionList({
         orderedGroups[0].collapsible = false
       }
 
+      const finalGroups = withPinned(orderedGroups)
       return {
-        rows: orderedGroups.flatMap(g => g.items),
-        groups: orderedGroups,
+        rows: finalGroups.flatMap(g => g.items),
+        groups: finalGroups,
       }
     }
 
@@ -385,7 +428,7 @@ export function SessionList({
     const groupsByKey = new Map<string, EntityListGroup<SessionListRow>>()
     const groupDates = new Map<string, Date>()
 
-    for (const row of rows) {
+    for (const row of remainingRows) {
       const day = startOfDay(new Date(row.item.lastMessageAt || 0))
       const groupKey = day.toISOString()
 
@@ -428,11 +471,12 @@ export function SessionList({
       orderedGroups[0].collapsible = false
     }
 
+    const finalGroups = withPinned(orderedGroups)
     return {
-      rows,
-      groups: orderedGroups,
+      rows: finalGroups.flatMap(g => g.items),
+      groups: finalGroups,
     }
-  }, [isSearchMode, matchingFilterItems, otherResultItems, flatItems, groupingMode, sessionStatuses, collapsedGroupsMeta, t])
+  }, [isSearchMode, matchingFilterItems, otherResultItems, flatItems, groupingMode, sessionStatuses, collapsedGroupsMeta, t, pinnedSessionIds])
 
   const flatRows = rowData.rows
 
@@ -638,6 +682,8 @@ export function SessionList({
     contentSearchResults,
     activeChatMatchInfo,
     hasPendingPrompt,
+    onTogglePin: handleTogglePin,
+    pinnedSessionIds,
   }), [
     handleRenameClick, onSessionStatusChange,
     onFlag, handleFlagWithToast, onUnflag, handleUnflagWithToast,
@@ -647,6 +693,7 @@ export function SessionList({
     sessionStatuses, flatLabels, labels, resolvedSearchQuery,
     focusedSessionId, selectionStore.state.selected, isMultiSelectActive,
     sessionOptions, contentSearchResults, activeChatMatchInfo, hasPendingPrompt,
+    handleTogglePin, pinnedSessionIds,
   ])
 
   // --- Empty state (non-search) — render before EntityList ---

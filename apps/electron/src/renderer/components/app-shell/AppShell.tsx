@@ -79,6 +79,7 @@ import { PanelHeaderCenterButton } from "@/components/ui/PanelHeaderCenterButton
 import { InfoPopover } from "../right-sidebar/InfoPopover"
 import { sidebarDocsAtomFamily } from "@/atoms/sidebar-docs"
 import { infoPopoverOpenAtom } from "@/atoms/info-popover"
+import { SessionSwitcher, sessionSwitcherOpenAtom } from "./SessionSwitcher"
 import { CompactSessionListFilter } from "./CompactSessionListFilter"
 import type { ChatDisplayHandle } from "./ChatDisplay"
 import { LeftSidebar } from "./LeftSidebar"
@@ -611,6 +612,25 @@ function AppShellContent({
   // │ to open without losing the Preview view they're currently reading.  │
   // └─────────────────────────────────────────────────────────────────────┘
   const [infoPopoverOpen, setInfoPopoverOpen] = useAtom(infoPopoverOpenAtom)
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ ⌘\ — open the session switcher dialog. Document-level listener so   │
+  // │ it works from anywhere (chat input, sidebar, popovers, etc).        │
+  // │ Skipped during IME composition to avoid stealing the key while the │
+  // │ user is typing Chinese/Japanese.                                    │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const setSessionSwitcherOpen = useSetAtom(sessionSwitcherOpenAtom)
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return
+      if (e.key !== '\\') return
+      if (e.isComposing) return
+      e.preventDefault()
+      e.stopPropagation()
+      setSessionSwitcherOpen((v) => !v)
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [setSessionSwitcherOpen])
   // Auto-close wiring lives just after focusedSessionId is read (a few lines
   // below) — see the [InfoPopover auto-close] block.
   // ┌─────────────────────────────────────────────────────────────────────┐
@@ -3736,6 +3756,9 @@ function AppShellContent({
       {/* Messaging dialogs (pairing-code + WA connect) — driven by messagingDialogAtom.
           Mounted here so they survive context-menu / dropdown close. */}
       <MessagingDialogHost />
+
+      {/* ⌘\ session switcher — fuzzy jump anywhere in the workspace. */}
+      <SessionSwitcher onSelect={navigateToSessionInPanel} />
 
     </AppShellProvider>
   )

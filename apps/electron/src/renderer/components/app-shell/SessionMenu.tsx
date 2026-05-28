@@ -30,6 +30,8 @@ import {
   RefreshCw,
   Tag,
   Send,
+  Pin,
+  PinOff,
 } from 'lucide-react'
 import { useMenuComponents } from '@/components/ui/menu-context'
 import { getStateColor, getStateIcon, type SessionStatusId } from '@/config/session-status-config'
@@ -64,6 +66,10 @@ export interface SessionMenuProps {
   onOpenInNewWindow: () => void
   onSendToWorkspace?: () => void
   onDelete: () => void
+  /** Pin / unpin to top of sidebar */
+  onTogglePin?: () => void
+  /** Whether this session is currently pinned (drives label + icon) */
+  isPinned?: boolean
 }
 
 /**
@@ -86,6 +92,8 @@ export function SessionMenu({
   onSendToWorkspace,
   onDelete,
   hasRemoteWorkspaces,
+  onTogglePin,
+  isPinned,
 }: SessionMenuProps) {
   const { t } = useTranslation()
 
@@ -189,6 +197,23 @@ export function SessionMenu({
       )}
 
       {/* Flag/Unflag */}
+      {/* Pin / Unpin to top of sidebar */}
+      {onTogglePin && (
+        <MenuItem onClick={onTogglePin}>
+          {isPinned ? (
+            <>
+              <PinOff className="h-3.5 w-3.5" />
+              <span className="flex-1">Unpin from top</span>
+            </>
+          ) : (
+            <>
+              <Pin className="h-3.5 w-3.5" />
+              <span className="flex-1">Pin to top</span>
+            </>
+          )}
+        </MenuItem>
+      )}
+
       {!isFlagged ? (
         <MenuItem onClick={onFlag}>
           <Flag className="h-3.5 w-3.5 text-info" />

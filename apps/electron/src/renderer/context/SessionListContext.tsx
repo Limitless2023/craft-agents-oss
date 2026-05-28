@@ -13,6 +13,10 @@ export interface SessionListContextValue {
   onUnflag?: (sessionId: string) => void
   onArchive?: (sessionId: string) => void
   onUnarchive?: (sessionId: string) => void
+  /** Toggle pinned state (per-workspace, persisted in localStorage) */
+  onTogglePin?: (sessionId: string) => void
+  /** Set of currently-pinned session IDs (drives menu label + sort order) */
+  pinnedSessionIds?: Set<string>
   onMarkUnread: (sessionId: string) => void
   onDelete: (sessionId: string, skipConfirmation?: boolean) => Promise<boolean>
   onLabelsChange?: (sessionId: string, labels: string[]) => void

@@ -29,6 +29,23 @@ import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { useAppShellContext } from '@/context/AppShellContext'
 import { sidebarDocsAtomFamily, closeSidebarDocTab, openSidebarDocTab } from '@/atoms/sidebar-docs'
 import { infoPopoverOpenAtom } from '@/atoms/info-popover'
+// dnd-kit primitives — kept inline here (vs reusing SortableList) because
+// SortableList uses vertical strategy and we want horizontal for the tab strip.
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface PreviewPanelProps {
   closeButton?: React.ReactNode
@@ -232,6 +249,33 @@ function PreviewPanelContent({
   )
 
   // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Drag-reorder tabs. dnd-kit's SortableContext takes the filePaths as │
+  // │ IDs (unique within a session) and notifies us via onDragEnd. We     │
+  // │ apply arrayMove to the tabs list AND map activeIndex through the    │
+  // │ move so the same logical tab stays active after the reorder.       │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const sortableSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  )
+  const tabIds = React.useMemo(() => state.tabs.map((t) => t.filePath), [state.tabs])
+  const handleTabDragEnd = React.useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setState((prev) => {
+      const oldIdx = prev.tabs.findIndex((t) => t.filePath === active.id)
+      const newIdx = prev.tabs.findIndex((t) => t.filePath === over.id)
+      if (oldIdx === -1 || newIdx === -1) return prev
+      const tabs = arrayMove(prev.tabs, oldIdx, newIdx)
+      // Recompute activeIndex so the same tab stays selected after reorder
+      let activeIndex = prev.activeIndex
+      if (activeIndex === oldIdx) activeIndex = newIdx
+      else if (oldIdx < activeIndex && newIdx >= activeIndex) activeIndex -= 1
+      else if (oldIdx > activeIndex && newIdx <= activeIndex) activeIndex += 1
+      return { tabs, activeIndex }
+    })
+  }, [setState])
+
+  // ┌─────────────────────────────────────────────────────────────────────┐
   // │ Drag-drop .md from Finder → new tab.                                │
   // │ Uses electronAPI.getFilePath (webUtils.getPathForFile under the    │
   // │ hood) to resolve the absolute OS path — File.path is gone in       │
@@ -350,36 +394,29 @@ function PreviewPanelContent({
         </div>
       </div>
 
-      {/* Tab strip — only when there are tabs */}
+      {/* Tab strip — sortable horizontal list */}
       {state.tabs.length > 0 && (
         <div className="flex items-center gap-0.5 px-1.5 pt-1.5 pb-0 border-b border-border/50 overflow-x-auto shrink-0">
-          {state.tabs.map((tab, idx) => {
-            const isActive = idx === state.activeIndex
-            return (
-              <button
-                key={tab.filePath}
-                onClick={() => handleTabClick(idx)}
-                onAuxClick={handleAuxClick(idx)}
-                title={tab.filePath}
-                className={cn(
-                  'group relative flex items-center gap-1 px-2 py-1 rounded-t-[6px] text-[12px] shrink-0 max-w-[140px] transition-colors',
-                  isActive
-                    ? 'bg-foreground/[0.06] text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]',
-                )}
-              >
-                <span className="truncate">{tabLabel(tab.filePath)}</span>
-                <span
-                  onClick={handleClose(idx)}
-                  className="shrink-0 opacity-0 group-hover:opacity-100 hover:bg-foreground/10 rounded-[4px] p-0.5 cursor-pointer"
-                  role="button"
-                  aria-label="Close tab"
-                >
-                  <X className="w-3 h-3" />
-                </span>
-              </button>
-            )
-          })}
+          <DndContext
+            sensors={sortableSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleTabDragEnd}
+          >
+            <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
+              {state.tabs.map((tab, idx) => (
+                <SortableTab
+                  key={tab.filePath}
+                  id={tab.filePath}
+                  label={tabLabel(tab.filePath)}
+                  title={tab.filePath}
+                  isActive={idx === state.activeIndex}
+                  onClick={() => handleTabClick(idx)}
+                  onAuxClick={handleAuxClick(idx)}
+                  onClose={handleClose(idx)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </div>
       )}
 
@@ -485,3 +522,64 @@ export function PreviewPanel({ closeButton }: PreviewPanelProps) {
 
   return <PreviewPanelContent sessionId={focusedSessionId} closeButton={closeButton} />
 }
+
+// ┌─────────────────────────────────────────────────────────────────────┐
+// │ SortableTab — single tab pill wired with useSortable.               │
+// │                                                                     │
+// │ Drag activation has a 5px distance threshold (set on the sensor)    │
+// │ so plain clicks still register as clicks, not drags. The close (X) │
+// │ uses stopPropagation in its onClick handler so dragging from the   │
+// │ X icon isn't recognized as a tab drag.                              │
+// └─────────────────────────────────────────────────────────────────────┘
+function SortableTab({
+  id,
+  label,
+  title,
+  isActive,
+  onClick,
+  onAuxClick,
+  onClose,
+}: {
+  id: string
+  label: string
+  title: string
+  isActive: boolean
+  onClick: () => void
+  onAuxClick: (e: React.MouseEvent) => void
+  onClose: (e: React.MouseEvent) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  return (
+    <button
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : undefined,
+      }}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      onAuxClick={onAuxClick}
+      title={title}
+      className={cn(
+        'group relative flex items-center gap-1 px-2 py-1 rounded-t-[6px] text-[12px] shrink-0 max-w-[140px] transition-colors',
+        isActive
+          ? 'bg-foreground/[0.06] text-foreground'
+          : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]',
+      )}
+    >
+      <span className="truncate">{label}</span>
+      <span
+        onClick={onClose}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="shrink-0 opacity-0 group-hover:opacity-100 hover:bg-foreground/10 rounded-[4px] p-0.5 cursor-pointer"
+        role="button"
+        aria-label="Close tab"
+      >
+        <X className="w-3 h-3" />
+      </span>
+    </button>
+  )
+}
+
