@@ -620,6 +620,14 @@ export default function AiSettingsPage() {
   // Workspaces for override cards
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Override counters — how many workspaces currently have a non-empty │
+  // │ `model` / `thinkingLevel` override. Re-counted on mount, after the │
+  // │ workspaces list loads, and after the user changes a global value.  │
+  // │ Drives the inline hint below the Default section header.           │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const [overrideCounts, setOverrideCounts] = useState<{ model: number; thinkingLevel: number }>({ model: 0, thinkingLevel: 0 })
+
   // Default settings state (app-level)
   const [defaultThinking, setDefaultThinking] = useState<ThinkingLevel>(DEFAULT_THINKING_LEVEL)
   const [extendedPromptCache, setExtendedPromptCache] = useState(false)
@@ -923,6 +931,72 @@ export default function AiSettingsPage() {
 
   const defaultModel = defaultConnection?.defaultModel ?? ''
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Workspace override sweeper.                                         │
+  // │                                                                     │
+  // │ SessionManager.createSession resolves model / thinkingLevel in     │
+  // │ this precedence: caller → wsConfig.defaults.<field> → global.      │
+  // │ A leftover field in any workspace config shadows the global value │
+  // │ the user just set on this page, so changes in Settings → AI         │
+  // │ silently have no effect.                                            │
+  // │                                                                     │
+  // │ Strategy: every time the user changes a global default here, walk   │
+  // │ all workspaces and clear that same field. Behavior is then:        │
+  // │   "Whatever I last set in Settings → AI is what new chats use."   │
+  // │ which matches the mental model the page already promises.          │
+  // │                                                                     │
+  // │ Workspaces can still set per-workspace overrides via their own     │
+  // │ workspace settings page after — they just don't survive a global   │
+  // │ change anymore.                                                     │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const clearWorkspaceOverridesFor = useCallback(async (field: 'model' | 'thinkingLevel') => {
+    if (!window.electronAPI) return 0
+    let clearedCount = 0
+    // workspaces state is loaded earlier on page mount; if it's stale we still
+    // make a best-effort pass against the latest copy we know.
+    for (const ws of workspaces) {
+      try {
+        const settings = await window.electronAPI.getWorkspaceSettings(ws.id)
+        if (settings && settings[field] !== undefined && settings[field] !== null) {
+          // The RPC handler accepts null to clear the field — typed signature
+          // claims it must match the field shape, but the backend explicitly
+          // assigns `null` straight into the defaults map. Cast to silence TS.
+          await window.electronAPI.updateWorkspaceSetting(ws.id, field, null as unknown as undefined)
+          clearedCount += 1
+        }
+      } catch (err) {
+        // Best-effort — log but continue with the others
+        console.warn(`[ai-settings] failed to clear ${field} on workspace ${ws.id}:`, err)
+      }
+    }
+    return clearedCount
+  }, [workspaces])
+
+  /** Recount workspace overrides — called on mount and after every clear/change. */
+  const refreshOverrideCounts = useCallback(async () => {
+    if (!window.electronAPI || workspaces.length === 0) {
+      setOverrideCounts({ model: 0, thinkingLevel: 0 })
+      return
+    }
+    let model = 0
+    let thinking = 0
+    for (const ws of workspaces) {
+      try {
+        const settings = await window.electronAPI.getWorkspaceSettings(ws.id)
+        if (settings?.model) model += 1
+        if (settings?.thinkingLevel) thinking += 1
+      } catch {
+        // ignore — best-effort metric
+      }
+    }
+    setOverrideCounts({ model, thinkingLevel: thinking })
+  }, [workspaces])
+
+  // Recount on mount (after workspaces load) so the indicator is fresh
+  useEffect(() => {
+    void refreshOverrideCounts()
+  }, [refreshOverrideCounts])
+
   // App-level default handlers
   const handleDefaultModelChange = useCallback(async (model: string) => {
     if (!window.electronAPI || !defaultConnection) return
@@ -932,7 +1006,13 @@ export default function AiSettingsPage() {
     const { isAuthenticated: _a, authError: _b, isDefault: _c, ...connectionData } = updated
     await window.electronAPI.saveLlmConnection(connectionData as import('../../../shared/types').LlmConnection)
     await refreshLlmConnections()
-  }, [defaultConnection, refreshLlmConnections])
+    // Sweep workspace overrides so the new default actually takes effect.
+    const cleared = await clearWorkspaceOverridesFor('model')
+    if (cleared > 0) {
+      toast.success(`Default model updated — cleared override in ${cleared} workspace${cleared === 1 ? '' : 's'}.`)
+    }
+    void refreshOverrideCounts()
+  }, [defaultConnection, refreshLlmConnections, clearWorkspaceOverridesFor, refreshOverrideCounts])
 
   const handleDefaultThinkingChange = useCallback(async (level: ThinkingLevel) => {
     if (!window.electronAPI) return
@@ -945,12 +1025,18 @@ export default function AiSettingsPage() {
       if (!result.success) {
         console.error('Failed to set default thinking level:', result.error)
         setDefaultThinking(previous)
+        return
       }
+      const cleared = await clearWorkspaceOverridesFor('thinkingLevel')
+      if (cleared > 0) {
+        toast.success(`Default thinking set to ${level} — cleared override in ${cleared} workspace${cleared === 1 ? '' : 's'}.`)
+      }
+      void refreshOverrideCounts()
     } catch (error) {
       console.error('Failed to set default thinking level:', error)
       setDefaultThinking(previous)
     }
-  }, [defaultThinking])
+  }, [defaultThinking, clearWorkspaceOverridesFor, refreshOverrideCounts])
 
   const handleExtendedPromptCacheChange = useCallback(async (enabled: boolean) => {
     setExtendedPromptCache(enabled)
@@ -1017,6 +1103,21 @@ export default function AiSettingsPage() {
               {/* Default Settings - only show if connections exist */}
               {llmConnections.length > 0 && (
               <SettingsSection title={t("settings.ai.defaultSection")} description={t("settings.ai.defaultSectionDesc")}>
+                {/* ┌─────────────────────────────────────────────────────────────┐
+                   │ Override hint — changes to Default values auto-clear the    │
+                   │ matching field in any workspace that overrode it, so what   │
+                   │ you set here actually wins. Shows current override count   │
+                   │ so the user knows ahead of time how many workspaces will   │
+                   │ snap back to the global value.                              │
+                   └─────────────────────────────────────────────────────────────┘ */}
+                {(overrideCounts.model + overrideCounts.thinkingLevel > 0) && (
+                  <div className="text-[12px] text-muted-foreground/70 mb-2">
+                    Changing a value below will clear matching overrides
+                    {overrideCounts.model > 0 && ` (Model: ${overrideCounts.model} workspace${overrideCounts.model === 1 ? '' : 's'})`}
+                    {overrideCounts.thinkingLevel > 0 && ` (Thinking: ${overrideCounts.thinkingLevel} workspace${overrideCounts.thinkingLevel === 1 ? '' : 's'})`}
+                    {' '}so the global value takes effect.
+                  </div>
+                )}
                 <SettingsCard>
                   <SettingsMenuSelectRow
                     label={t("settings.ai.connection")}
