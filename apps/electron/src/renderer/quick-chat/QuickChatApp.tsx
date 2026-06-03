@@ -35,14 +35,14 @@
 
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
-import { MessageSquare, Copy, Check, Plus } from 'lucide-react'
-import { Markdown } from '@craft-agent/ui'
+import { MessageSquare, Copy, Check, Plus, GripHorizontal, ArrowUp, X } from 'lucide-react'
+import { Markdown, cn } from '@craft-agent/ui'
 import '../index.css'
 
 // ─── Constants ────────────────────────────────────────────────────────────
 const BALL_SIZE = 64
-const EXPANDED_W = 600
-const EXPANDED_H = 460
+const EXPANDED_W = 560
+const EXPANDED_H = 480
 const SESSION_REUSE_WINDOW_MS = 60 * 60 * 1000 // 1 hour
 
 // ┌────────────────────────────────────────────────────────────────────────┐
@@ -318,97 +318,144 @@ function ExpandedChat({
     } catch {/* clipboard denied */}
   }
 
+  // Has any conversation? Drives empty-state vs transcript view.
+  const hasMessages = messages.length > 0
+  const canSend = input.trim().length > 0 && !isStreaming
+
   return (
-    <div className="h-screen w-screen flex flex-col bg-background rounded-[12px] shadow-strong overflow-hidden border border-border/40">
-      {/* Header — drag handle + collapse hint */}
-      <div
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        className="flex items-center justify-between px-3 h-9 shrink-0 border-b border-border/40 bg-foreground/[0.02]"
-      >
-        <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-accent" />
-          <span className="text-[11px] font-medium text-muted-foreground">English Coach</span>
-        </div>
-        <div className="flex items-center gap-1">
+    // Outer rounded card — matches EditPopover styling: shadow-strong + 12px
+    // radius + thin border. Whole card is drag-region except interactive bits.
+    <div
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      className="h-screen w-screen flex flex-col bg-background rounded-[12px] shadow-strong overflow-hidden border border-border/40 relative"
+    >
+      {/* Top grip + window-action buttons. Grip is decorative (visual cue
+         that the whole card is draggable); the actual drag region is the
+         whole outer div. */}
+      <div className="flex items-center justify-between px-2 pt-2 shrink-0">
+        <div className="w-7 h-7" /> {/* spacer balancing right-side buttons */}
+        <GripHorizontal className="w-4 h-4 text-muted-foreground/30" />
+        <div
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          className="flex items-center gap-0.5"
+        >
           <button
             onClick={handleNewChat}
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            className="text-muted-foreground/60 hover:text-foreground p-1 rounded-[4px] hover:bg-foreground/[0.05]"
-            title="New chat (forget current session)"
+            className="w-7 h-7 inline-flex items-center justify-center rounded-[6px] text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.05]"
+            title="New chat"
           >
-            <Plus className="w-3 h-3" />
+            <Plus className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={onCollapse}
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            className="text-[10px] text-muted-foreground/60 hover:text-foreground px-1.5 py-0.5 rounded-[4px] hover:bg-foreground/[0.05]"
+            className="w-7 h-7 inline-flex items-center justify-center rounded-[6px] text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.05]"
             title="Collapse (ESC)"
           >
-            ESC
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Transcript */}
-      <div ref={transcriptRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
-        {messages.length === 0 && (
-          <div className="text-[12px] text-muted-foreground/50 italic py-2">
-            Paste a sentence and I'll suggest more natural phrasings.
+      {/* Main content — empty-state (centered) OR transcript (top-anchored).
+         Mirrors EditPopover's compact ChatDisplay layout. */}
+      <div
+        ref={transcriptRef}
+        className="flex-1 min-h-0 overflow-y-auto px-6 flex flex-col"
+      >
+        {!hasMessages ? (
+          // Empty state: centered large title + subtitle, same visual rhythm
+          // as EditPopover's "What would you like to change?" prompt.
+          <div className="flex-1 flex flex-col items-center justify-center text-center -mt-4">
+            <div className="text-[18px] font-medium text-foreground/90 mb-1">
+              What would you like to refine?
+            </div>
+            <div className="text-[13px] text-muted-foreground/60">
+              Paste any English text — I'll handle the rest
+            </div>
           </div>
-        )}
-        {messages.map((m) => (
-          <div key={m.id} className="group">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/40 mb-1">
-              {m.role === 'user' ? 'You' : 'Coach'}
-            </div>
-            <div className={m.role === 'user' ? 'text-[13px] text-foreground/80' : 'text-[13px]'}>
-              {m.role === 'user' ? (
-                <p className="whitespace-pre-wrap">{m.content}</p>
-              ) : (
-                <div className="prose-sm">
-                  <Markdown mode="minimal">{m.content}</Markdown>
+        ) : (
+          <div className="py-3 space-y-3 w-full">
+            {messages.map((m) => (
+              <div key={m.id} className="group">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground/40 mb-1">
+                  {m.role === 'user' ? 'You' : 'Coach'}
                 </div>
-              )}
-            </div>
-            {m.role === 'assistant' && m.content && (
-              <button
-                onClick={() => handleCopy(m.id, m.content)}
-                className="mt-1 inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                {copiedId === m.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                {copiedId === m.id ? 'Copied' : 'Copy'}
-              </button>
+                <div className={m.role === 'user' ? 'text-[13px] text-foreground/80' : 'text-[13px]'}>
+                  {m.role === 'user' ? (
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                  ) : (
+                    <div className="prose-sm">
+                      <Markdown mode="minimal">{m.content}</Markdown>
+                    </div>
+                  )}
+                </div>
+                {m.role === 'assistant' && m.content && (
+                  <button
+                    onClick={() => handleCopy(m.id, m.content)}
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                    className="mt-1 inline-flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    {copiedId === m.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    {copiedId === m.id ? 'Copied' : 'Copy'}
+                  </button>
+                )}
+              </div>
+            ))}
+            {isStreaming && messages[messages.length - 1]?.role === 'user' && (
+              <div className="text-[12px] text-muted-foreground/40 italic">Thinking…</div>
             )}
           </div>
-        ))}
-        {isStreaming && messages[messages.length - 1]?.role === 'user' && (
-          <div className="text-[12px] text-muted-foreground/40 italic">Thinking…</div>
         )}
       </div>
 
-      {/* Clipboard suggestion */}
+      {/* Clipboard suggestion — sits between transcript and input as a
+         subtle one-line affordance. Shown only when the input is empty
+         AND the clipboard had usable content at expand time. */}
       {clipboardSuggestion && !input && (
-        <div className="px-4 py-1 text-[11px] text-muted-foreground/60 border-t border-border/40 bg-foreground/[0.02]">
+        <div
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          className="px-6 py-1 text-[11px] text-muted-foreground/60"
+        >
           <span className="font-medium">Clipboard:</span>{' '}
           <span className="opacity-70">{clipboardSuggestion.slice(0, 90)}{clipboardSuggestion.length > 90 ? '…' : ''}</span>
           <span className="ml-2 text-[10px]">Press Tab</span>
         </div>
       )}
 
-      {/* Input */}
-      <div className="px-3 py-3 border-t border-border/40 bg-background shrink-0">
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={isStreaming ? '' : "Paste or type something to refine…"}
-          className="w-full text-[13px] bg-foreground/[0.04] rounded-[8px] px-3 py-2 outline-none resize-none focus:bg-foreground/[0.06] placeholder:text-muted-foreground/40"
-          rows={2}
-          autoComplete="off"
-          spellCheck={false}
-          disabled={isStreaming}
-        />
+      {/* Input row — rounded card with textarea + circular ArrowUp send
+         button in the bottom-right corner. Matches EditPopover's input
+         shell so the two surfaces feel like the same family. */}
+      <div
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        className="px-3 pb-3 pt-1 shrink-0"
+      >
+        <div className="relative rounded-[12px] border border-border/60 bg-background shadow-minimal focus-within:border-border/90 transition-colors">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={hasMessages ? "Follow up…" : "What should I refine?"}
+            className="w-full text-[14px] bg-transparent px-4 pt-3 pb-12 outline-none resize-none placeholder:text-muted-foreground/40"
+            rows={3}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={isStreaming}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!canSend}
+            className={cn(
+              'absolute bottom-2 right-2 w-8 h-8 rounded-full inline-flex items-center justify-center transition-colors',
+              canSend
+                ? 'bg-foreground text-background hover:bg-foreground/90'
+                : 'bg-foreground/10 text-foreground/30 cursor-not-allowed',
+            )}
+            title="Send (Enter)"
+          >
+            <ArrowUp className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   )
