@@ -136,6 +136,14 @@ function ExpandedChat({
   const [copiedId, setCopiedId] = React.useState<string | null>(null)
   const inputRef = React.useRef<HTMLTextAreaElement>(null)
   const transcriptRef = React.useRef<HTMLDivElement>(null)
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ sessionIdRef mirrors sessionId synchronously so the global event   │
+  // │ listener can filter events the instant createSession returns —     │
+  // │ React's setSessionId is async and runs after sendMessage has       │
+  // │ already started producing text_delta events. Without the ref, the  │
+  // │ first turn's tokens get dropped (filtered against null sessionId). │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const sessionIdRef = React.useRef<string | null>(null)
 
   // ┌─────────────────────────────────────────────────────────────────────┐
   // │ On mount: focus input + pull clipboard suggestion + decide whether │
@@ -150,6 +158,7 @@ function ExpandedChat({
     const persisted = loadPersistedSession()
     if (persisted && Date.now() - persisted.lastActivityAt < SESSION_REUSE_WINDOW_MS) {
       setSessionId(persisted.sessionId)
+      sessionIdRef.current = persisted.sessionId
     }
   }, [])
 
@@ -168,12 +177,11 @@ function ExpandedChat({
   // │ isStreaming off so the input becomes hot again.                     │
   // └─────────────────────────────────────────────────────────────────────┘
   React.useEffect(() => {
-    if (!sessionId) return
-    // onSessionEvent is the single event stream for ALL sessions — filter
-    // by sessionId in the callback. Returns an unsubscribe function we call
-    // on session change or unmount.
+    // Subscribe ONCE on mount, not on sessionId change. We filter via the
+    // ref inside the callback so the first turn's text_delta events (which
+    // start streaming before React commits setSessionId) aren't dropped.
     const cleanup = window.electronAPI.onSessionEvent((evt) => {
-      if (evt.sessionId !== sessionId) return
+      if (evt.sessionId !== sessionIdRef.current) return
 
       if (evt.type === 'text_delta') {
         const delta = evt.delta ?? ''
@@ -185,15 +193,27 @@ function ExpandedChat({
           return [...prev, { id: `${Date.now()}-a`, role: 'assistant', content: delta }]
         })
       } else if (evt.type === 'text_complete') {
-        // Non-intermediate text_complete is the final assistant turn.
-        // For our single-tool-free coach scenario, both kinds end streaming.
+        // Some models emit text_complete with the full text and no preceding
+        // text_delta stream. Handle both: replace the trailing assistant
+        // bubble's content with the complete text if we have an empty one,
+        // or append a new bubble if there isn't an assistant turn open yet.
+        const fullText = evt.text ?? ''
+        if (fullText) {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1]
+            if (last && last.role === 'assistant') {
+              return [...prev.slice(0, -1), { ...last, content: fullText }]
+            }
+            return [...prev, { id: `${Date.now()}-a`, role: 'assistant', content: fullText }]
+          })
+        }
         setIsStreaming(false)
       } else if (evt.type === 'complete' || evt.type === 'interrupted' || evt.type === 'error') {
         setIsStreaming(false)
       }
     })
     return () => { cleanup?.() }
-  }, [sessionId])
+  }, [])
 
   // Auto-scroll transcript on new content
   React.useEffect(() => {
@@ -220,10 +240,13 @@ function ExpandedChat({
           thinkingLevel: 'low',
           workingDirectory: 'none',
           labels: ['quick-chat'],
-          // Embed the system role via a hidden first message — system prompts
-          // proper require connection-level config; this is reliable cross-model.
         })
         currentSessionId = session.id
+        // Update the ref SYNCHRONOUSLY before sendMessage so the listener
+        // (subscribed once on mount) starts catching events for this id
+        // immediately. setSessionId is queued by React and would otherwise
+        // race the first text_delta back from the agent.
+        sessionIdRef.current = session.id
         setSessionId(session.id)
         persistSession(session.id)
       }
