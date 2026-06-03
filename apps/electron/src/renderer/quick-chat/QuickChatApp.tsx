@@ -237,8 +237,16 @@ function ExpandedChat({
         const session = await window.electronAPI.createSession(workspaceId, {
           name: 'QuickChat',
           model: 'claude-sonnet-4-6',
-          thinkingLevel: 'low',
+          // 'off' fully disables extended thinking — for one-shot English
+          // phrasing help, even 'low' thinking adds 1-2s latency for no
+          // quality gain. Direct generation is much snappier.
+          thinkingLevel: 'off',
           workingDirectory: 'none',
+          // 'allow-all' skips any permission prompt. The English coach
+          // session never invokes tools, but the default 'safe' mode
+          // could pop confirmations if the model ever decided to call
+          // one — preempt that since the flow is supposed to be silent.
+          permissionMode: 'allow-all',
           labels: ['quick-chat'],
         })
         currentSessionId = session.id
