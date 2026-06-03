@@ -316,16 +316,6 @@ export interface ElectronAPI {
   /** Returns the absolute filesystem path for a File (only works for file-picker / OS-drag Files). */
   getFilePath(file: File): string | null
 
-  // ┌─────────────────────────────────────────────────────────────────────┐
-  // │ QuickChat floating-ball window controls.                            │
-  // │ Only meaningful inside the QuickChat renderer (URL `quickChat=true`)│
-  // │ — calling these from the main window resizes the wrong BrowserWin. │
-  // └─────────────────────────────────────────────────────────────────────┘
-  resizeQuickChatWindow(width: number, height: number): Promise<void>
-  toggleQuickChatWindow(): Promise<void>
-  /** Synchronous read of system clipboard text. Empty string on failure. */
-  readClipboardText(): string
-
   // Filesystem search (for @ mention file selection)
   searchFiles(basePath: string, query: string): Promise<FileSearchResult[]>
 

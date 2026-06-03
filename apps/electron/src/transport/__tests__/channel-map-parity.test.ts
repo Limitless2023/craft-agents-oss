@@ -28,9 +28,6 @@ type ApiToChannelMapKeys = Exclude<
   | 'onTransferProgress' // direct IPC listener — chunk upload progress
   | 'changeLanguage' // direct IPC to main process — syncs i18n language
   | 'getFilePath' // renderer-local — webUtils.getPathForFile, no IPC round-trip
-  | 'resizeQuickChatWindow' // direct IPC to main process — QuickChat floating window control
-  | 'toggleQuickChatWindow' // direct IPC to main process — QuickChat floating window control
-  | 'readClipboardText' // renderer-local — clipboard.readText via preload require, no IPC round-trip
 > | BrowserPaneKeys
 type ChannelMapKeys = keyof typeof CHANNEL_MAP & string
 

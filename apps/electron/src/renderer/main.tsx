@@ -126,28 +126,12 @@ function Root() {
   )
 }
 
-// ┌─────────────────────────────────────────────────────────────────────────┐
-// │ QuickChat dispatch — the floating-ball window loads this same bundle    │
-// │ but with `?quickChat=true`. We branch BEFORE mounting React-heavy infra │
-// │ (Sentry boundary, Jotai provider, ThemeProvider) so the ball's first   │
-// │ paint stays sub-100ms.                                                 │
-// └─────────────────────────────────────────────────────────────────────────┘
-const isQuickChatWindow = new URLSearchParams(window.location.search).get('quickChat') === 'true'
-
-if (isQuickChatWindow) {
-  // Dynamic import to keep the QuickChat code out of the main window's
-  // initial bundle (Vite splits this into a separate chunk).
-  import('./quick-chat/QuickChatApp').then(({ mountQuickChat }) => {
-    mountQuickChat()
-  })
-} else {
-  ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-      <Sentry.ErrorBoundary fallback={<CrashFallback />}>
-        <JotaiProvider>
-          <Root />
-        </JotaiProvider>
-      </Sentry.ErrorBoundary>
-    </React.StrictMode>
-  )
-}
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <Sentry.ErrorBoundary fallback={<CrashFallback />}>
+      <JotaiProvider>
+        <Root />
+      </JotaiProvider>
+    </Sentry.ErrorBoundary>
+  </React.StrictMode>
+)
