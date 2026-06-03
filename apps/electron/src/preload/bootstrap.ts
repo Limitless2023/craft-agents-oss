@@ -444,4 +444,24 @@ client.onConnectionStateChanged((state) => {
   }
 }
 
+// QuickChat window controls — used by the floating ball renderer to resize
+// itself between ball ↔ expanded chat states, toggle visibility, and read
+// the system clipboard. These bypass the standard client.invoke pipeline
+// because they're trivial main-process operations, not RpcServer-handled.
+;(api as any).resizeQuickChatWindow = (width: number, height: number) =>
+  ipcRenderer.invoke('__quickChat:resize', width, height)
+;(api as any).toggleQuickChatWindow = () =>
+  ipcRenderer.invoke('__quickChat:toggle')
+;(api as any).readClipboardText = (): string => {
+  try {
+    // clipboard is available in preload via Electron's contextBridge whitelist
+    // We import it via ipcRenderer.sendSync to avoid pulling clipboard module
+    // into the sandbox. Instead, do it inline via require.
+    const { clipboard } = require('electron')
+    return clipboard.readText() ?? ''
+  } catch {
+    return ''
+  }
+}
+
 contextBridge.exposeInMainWorld('electronAPI', api)

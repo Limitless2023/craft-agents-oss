@@ -97,6 +97,11 @@ import { initModelRefreshService, getModelRefreshService, setFetcherPlatform } f
 import { setSearchPlatform, setImageProcessor } from '@craft-agent/server-core/services'
 import { createApplicationMenu } from './menu'
 import { WindowManager } from './window-manager'
+import {
+  createQuickChatWindow,
+  resizeQuickChatWindow,
+  toggleQuickChatVisible,
+} from './quick-chat-window'
 import { loadWindowState, saveWindowState } from './window-state'
 import { getWorkspaces, getWorkspaceByNameOrId, loadStoredConfig, addWorkspace, saveConfig } from '@craft-agent/shared/config'
 import { getDefaultWorkspacesDir } from '@craft-agent/shared/workspaces'
@@ -401,6 +406,19 @@ async function createInitialWindows(): Promise<void> {
   // Default: open window for first workspace
   windowManager.createWindow({ workspaceId: workspaces[0].id })
   mainLog.info(`Created window for first workspace: ${workspaces[0].name}`)
+
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Spawn the always-visible QuickChat floating ball alongside the     │
+  // │ main window. Bound to the first workspace by default — clicking    │
+  // │ the ball expands a mini chat that creates / reuses a session in    │
+  // │ that workspace via the standard SessionManager IPC path.           │
+  // └─────────────────────────────────────────────────────────────────────┘
+  try {
+    createQuickChatWindow(workspaces[0].id)
+    mainLog.info('[quick-chat] floating window created')
+  } catch (err) {
+    mainLog.error('[quick-chat] failed to create floating window:', err)
+  }
 }
 
 app.whenReady().then(async () => {
@@ -572,6 +590,18 @@ app.whenReady().then(async () => {
         || BrowserWindow.getAllWindows()[0]
       const result = await dialog.showOpenDialog(win, spec)
       return { canceled: result.canceled, filePaths: result.filePaths }
+    })
+
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │ QuickChat window controls — used by the floating ball renderer to  │
+    // │ resize its own parent window (ball ↔ expanded chat) and to read   │
+    // │ the system clipboard for the "auto-fill prompt" feature.           │
+    // └─────────────────────────────────────────────────────────────────────┘
+    ipcMain.handle('__quickChat:resize', async (_event, width: number, height: number) => {
+      resizeQuickChatWindow(width, height)
+    })
+    ipcMain.handle('__quickChat:toggle', async () => {
+      toggleQuickChatVisible()
     })
 
     if (!isClientOnly) {
