@@ -35,7 +35,7 @@
 
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
-import { MessageSquare, Copy, Check } from 'lucide-react'
+import { MessageSquare, Copy, Check, Plus } from 'lucide-react'
 import { Markdown } from '@craft-agent/ui'
 import '../index.css'
 
@@ -221,6 +221,24 @@ function ExpandedChat({
   }, [messages])
 
   // ─── Send a message ─────────────────────────────────────────────────────
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ "New chat" — reset transcript and forget the persisted session so   │
+  // │ the next send creates a fresh one with whatever settings are        │
+  // │ current (thinking, model, system framing, etc.). Used when the      │
+  // │ user wants to dodge the 1h reuse window — e.g. after we tweak       │
+  // │ the QuickChat config but localStorage still points at an old        │
+  // │ session that hasn't picked up the change.                           │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const handleNewChat = React.useCallback(() => {
+    setMessages([])
+    setSessionId(null)
+    sessionIdRef.current = null
+    setIsStreaming(false)
+    try { localStorage.removeItem(LS_KEY_SESSION) } catch { /* ignore */ }
+    setInput('')
+    inputRef.current?.focus()
+  }, [])
+
   const handleSend = React.useCallback(async () => {
     const text = input.trim()
     if (!text || isStreaming) return
@@ -311,14 +329,24 @@ function ExpandedChat({
           <div className="w-2 h-2 rounded-full bg-accent" />
           <span className="text-[11px] font-medium text-muted-foreground">English Coach</span>
         </div>
-        <button
-          onClick={onCollapse}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="text-[10px] text-muted-foreground/60 hover:text-foreground px-1.5 py-0.5 rounded-[4px] hover:bg-foreground/[0.05]"
-          title="Collapse (ESC)"
-        >
-          ESC
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleNewChat}
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            className="text-muted-foreground/60 hover:text-foreground p-1 rounded-[4px] hover:bg-foreground/[0.05]"
+            title="New chat (forget current session)"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+          <button
+            onClick={onCollapse}
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            className="text-[10px] text-muted-foreground/60 hover:text-foreground px-1.5 py-0.5 rounded-[4px] hover:bg-foreground/[0.05]"
+            title="Collapse (ESC)"
+          >
+            ESC
+          </button>
+        </div>
       </div>
 
       {/* Transcript */}
