@@ -323,11 +323,12 @@ function ExpandedChat({
   const canSend = input.trim().length > 0 && !isStreaming
 
   return (
-    // Outer rounded card — matches EditPopover styling: shadow-strong + 12px
-    // radius + thin border. Whole card is drag-region except interactive bits.
+    // Outer rounded card. Uses bg-background/80 so the macOS vibrancy on
+    // the BrowserWindow shows through — clean frosted look that respects
+    // system light/dark. The thin border keeps the card edge defined.
     <div
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      className="h-screen w-screen flex flex-col bg-background rounded-[12px] shadow-strong overflow-hidden border border-border/40 relative"
+      className="h-screen w-screen flex flex-col bg-background/80 rounded-[12px] overflow-hidden border border-border/40 relative"
     >
       {/* Top grip + window-action buttons. Grip is decorative (visual cue
          that the whole card is draggable); the actual drag region is the

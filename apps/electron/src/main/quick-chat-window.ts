@@ -34,6 +34,19 @@ const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
 let quickWindow: BrowserWindow | null = null
 
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ Ball "home" position — remembered across expand/collapse transitions.   │
+// │                                                                         │
+// │ Without this, collapsing would anchor to the expanded window's          │
+// │ bottom-right corner — so if you dragged the expanded chat to the       │
+// │ middle of the screen and then closed it, the ball would stay there.    │
+// │                                                                         │
+// │ Updated only while the window is in BALL size (and via a `move`        │
+// │ listener so user drags on the ball itself are remembered). Restored     │
+// │ when the renderer asks us to resize back DOWN to ball dimensions.       │
+// └─────────────────────────────────────────────────────────────────────────┘
+let ballHomeBounds: { x: number; y: number } | null = null
+
 /** Compute the bottom-right anchor for the ball on the primary display. */
 function getBottomRightPosition(width: number, height: number): { x: number; y: number } {
   const display = screen.getPrimaryDisplay()
@@ -70,10 +83,19 @@ export function createQuickChatWindow(workspaceId: string): BrowserWindow {
     fullscreenable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    hasShadow: false,
+    hasShadow: true, // native shadow matches the main window's look
+    backgroundColor: '#00000000', // fully transparent — actual color comes from renderer CSS
     // macOS: 'panel' makes the window not steal focus from the active app
     // when summoned, and keeps it out of the dock / Mission Control.
-    ...(isMac && { type: 'panel' as const }),
+    // 'vibrancy' gives a native frosted-glass background that adapts to
+    // system light/dark — looks more polished than a flat bg-background
+    // CSS color (the QuickChat renderer has no ThemeProvider so CSS vars
+    // may not match the user's app theme).
+    ...(isMac && {
+      type: 'panel' as const,
+      vibrancy: 'sidebar' as const,
+      visualEffectState: 'active' as const,
+    }),
     webPreferences: {
       preload: join(__dirname, 'bootstrap-preload.cjs'),
       contextIsolation: true,
@@ -105,6 +127,21 @@ export function createQuickChatWindow(workspaceId: string): BrowserWindow {
     quickWindow?.show()
   })
 
+  // Seed ball home with the initial bottom-right anchor.
+  ballHomeBounds = { x: pos.x, y: pos.y }
+
+  // Update the ball "home" whenever the user drags the window while it's
+  // at ball size. Drags during the expanded state are deliberately ignored —
+  // collapsing should return to where the ball lived before expanding, not
+  // wherever the user happened to move the expanded chat.
+  quickWindow.on('move', () => {
+    if (!quickWindow || quickWindow.isDestroyed()) return
+    const b = quickWindow.getBounds()
+    if (b.width === BALL_WIDTH && b.height === BALL_HEIGHT) {
+      ballHomeBounds = { x: b.x, y: b.y }
+    }
+  })
+
   quickWindow.on('closed', () => {
     quickWindow = null
   })
@@ -117,16 +154,36 @@ export function createQuickChatWindow(workspaceId: string): BrowserWindow {
 }
 
 /**
- * Resize the quick window in-place, keeping its bottom-right anchored to
- * the current position. The renderer calls this when switching between
- * ball ↔ expanded states.
+ * Resize the quick window in-place. The renderer calls this when switching
+ * between ball ↔ expanded states.
+ *
+ * Behavior:
+ *   - Ball → expanded: anchor bottom-right corner of current bounds so the
+ *     expand grows up + left. The current position IS the ball home.
+ *   - Expanded → ball: snap back to `ballHomeBounds` so the ball returns
+ *     to wherever it was last sitting (default bottom-right of primary
+ *     display on first launch), NOT wherever the user dragged the
+ *     expanded chat. Falls back to a fresh bottom-right computation if
+ *     home is somehow null (defensive — shouldn't happen).
  *
  * `animate: true` on macOS gives a smooth Apple-y transition.
  */
 export function resizeQuickChatWindow(width: number, height: number): void {
   if (!quickWindow || quickWindow.isDestroyed()) return
+  const isCollapsingToBall = width === BALL_WIDTH && height === BALL_HEIGHT
+
+  if (isCollapsingToBall) {
+    const target = ballHomeBounds ?? getBottomRightPosition(BALL_WIDTH, BALL_HEIGHT)
+    quickWindow.setBounds({ x: target.x, y: target.y, width, height }, true)
+    // Refresh home from the post-resize bounds in case OS clamped position
+    const b = quickWindow.getBounds()
+    ballHomeBounds = { x: b.x, y: b.y }
+    return
+  }
+
+  // Expanding: anchor bottom-right of current position so the expand
+  // grows up + left out of the ball.
   const bounds = quickWindow.getBounds()
-  // Anchor bottom-right corner so the expand grows up + left
   const newX = bounds.x + bounds.width - width
   const newY = bounds.y + bounds.height - height
   quickWindow.setBounds({ x: newX, y: newY, width, height }, true)
