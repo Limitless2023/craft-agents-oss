@@ -399,19 +399,22 @@ async function createInitialWindows(): Promise<void> {
 
     if (restoredCount > 0) {
       mainLog.info(`Restored ${restoredCount} window(s) from saved state`)
-      return
+    } else {
+      // Saved state present but every entry pointed to a missing workspace.
+      // Fall through to the default open below so the user isn't stranded.
+      windowManager.createWindow({ workspaceId: workspaces[0].id })
+      mainLog.info(`Created window for first workspace: ${workspaces[0].name}`)
     }
+  } else {
+    // Default: open window for first workspace
+    windowManager.createWindow({ workspaceId: workspaces[0].id })
+    mainLog.info(`Created window for first workspace: ${workspaces[0].name}`)
   }
-
-  // Default: open window for first workspace
-  windowManager.createWindow({ workspaceId: workspaces[0].id })
-  mainLog.info(`Created window for first workspace: ${workspaces[0].name}`)
 
   // ┌─────────────────────────────────────────────────────────────────────┐
   // │ Spawn the always-visible QuickChat floating ball alongside the     │
-  // │ main window. Bound to the first workspace by default — clicking    │
-  // │ the ball expands a mini chat that creates / reuses a session in    │
-  // │ that workspace via the standard SessionManager IPC path.           │
+  // │ main window — regardless of whether we restored from saved state   │
+  // │ or fell through to default. Bound to the first workspace.          │
   // └─────────────────────────────────────────────────────────────────────┘
   try {
     createQuickChatWindow(workspaces[0].id)
