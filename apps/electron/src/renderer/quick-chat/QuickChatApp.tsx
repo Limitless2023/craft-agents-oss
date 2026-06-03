@@ -45,13 +45,30 @@ const EXPANDED_W = 600
 const EXPANDED_H = 460
 const SESSION_REUSE_WINDOW_MS = 60 * 60 * 1000 // 1 hour
 
-const ENGLISH_COACH_PROMPT = `You are an English-language coach helping a non-native speaker phrase ideas more naturally. The user will paste a draft sentence, paragraph, or question. Your job:
-
-1. Suggest 1-2 improved versions, ranked by naturalness.
-2. Briefly explain WHY (one or two short bullets — common collocation, register, idiom, etc.).
-3. If the original is already great, say so.
-
-Keep responses tight — no preamble, no fluff. Use markdown lists. Default to a polite, professional register unless the user signals otherwise.`
+// ┌────────────────────────────────────────────────────────────────────────┐
+// │ First-turn framing.                                                    │
+// │                                                                        │
+// │ We don't have a clean way to inject a real system prompt through       │
+// │ CreateSessionOptions, so the first user message has to do the priming. │
+// │ Format the request as a natural user ask ("please improve this English │
+// │ phrasing") rather than an embedded "you are X" system prompt — that    │
+// │ way when the session is opened in the main app, it reads as a normal   │
+// │ conversation instead of a leaked prompt.                               │
+// │                                                                        │
+// │ Subsequent turns in the same session just send the user's text as-is;  │
+// │ Claude carries the "English coach" intent from context.                │
+// └────────────────────────────────────────────────────────────────────────┘
+function buildFirstTurnMessage(userText: string): string {
+  return [
+    'Please help me improve this English phrasing.',
+    '- Suggest 1-2 more natural versions, ranked.',
+    '- Briefly explain why (one short bullet each).',
+    '- If the original is already fine, just say so.',
+    '',
+    'Text:',
+    userText,
+  ].join('\n')
+}
 
 const LS_KEY_SESSION = 'craft-quick-chat:session'
 
@@ -212,12 +229,12 @@ function ExpandedChat({
       }
       persistSession(currentSessionId)
 
-      // First message of a fresh session: prepend the coach prompt so the
-      // model has clear instructions before seeing the user's draft.
+      // First message of a fresh session gets the natural-request framing
+      // so the model knows we want phrasing help. Follow-up messages in
+      // the same session inherit the intent from conversation context and
+      // can be sent verbatim.
       const isFirstUserMessage = messages.length === 0
-      const composed = isFirstUserMessage
-        ? `${ENGLISH_COACH_PROMPT}\n\n---\n\n${text}`
-        : text
+      const composed = isFirstUserMessage ? buildFirstTurnMessage(text) : text
 
       await window.electronAPI.sendMessage(currentSessionId, composed, [], [], {})
     } catch (err) {

@@ -97,6 +97,10 @@ export function createQuickChatWindow(workspaceId: string): BrowserWindow {
     quickWindow.loadFile(join(__dirname, 'renderer/index.html'), { query })
   }
 
+  // Show immediately + on ready-to-show. Belt-and-brace because in early
+  // testing ready-to-show was sometimes delayed and the user couldn't
+  // find the ball.
+  quickWindow.show()
   quickWindow.once('ready-to-show', () => {
     quickWindow?.show()
   })
