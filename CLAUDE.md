@@ -59,6 +59,17 @@ Clicking local file path links in AI messages (e.g. `[report](/Users/foo/report.
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.
 
+### Check whether upstream has a new release first:
+
+```bash
+# 远端最新 tag（直连服务器，非缓存）；若高于本地基线 v0.10.1 即说明官方发新版了
+export all_proxy=socks5://127.0.0.1:7893
+git ls-remote --tags --sort=-v:refname origin | head -1
+git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
+```
+
+> Baseline as of 2026-06-08: local main is built on upstream **v0.10.1** (2026-06-02) and is fully up to date — 0 upstream commits behind, 58 custom commits ahead. v0.10.1 = Opus 4.8 default + session-title language fix + macOS Apple-Silicon-only build.
+
 ### After an official Craft Agents update:
 
 ```bash
