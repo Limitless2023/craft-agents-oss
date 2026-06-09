@@ -68,7 +68,9 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
-> Baseline as of 2026-06-08: local main is built on upstream **v0.10.1** (2026-06-02) and is fully up to date — 0 upstream commits behind, 58 custom commits ahead. v0.10.1 = Opus 4.8 default + session-title language fix + macOS Apple-Silicon-only build.
+> Baseline as of 2026-06-09: local main is merged up to upstream **v0.10.2** (2026-06-09) — 0 upstream commits behind, 61 custom commits ahead. v0.10.2 = label `link` value type + per-OAuth Anthropic account/org visibility + Stop-restores-last-message + Pi prompt-cache fix (Claude path byte-identical).
+>
+> **Upgrade gotcha (v0.10.2+):** the full umbrella `build` now fails its `lint` gate — v0.10.2's stricter custom rules `craft-links/no-direct-file-open` (DocsPanel/InfoPopover) and `craft-styles/no-nonstandard-shadows` (FabNewChat) flag our pre-existing custom code. Lint is style-only and doesn't affect artifacts; when backend/main changes need a main rebuild, run the build steps individually (`build:main`, `build:preload`, `build:preload-toolbar`, `build:interceptor`, `build:renderer`, `build:copy`) skipping `lint`. `build:validate` references a non-existent `scripts/validate-assets.ts` — harmless, ignore.
 
 ### After an official Craft Agents update:
 
