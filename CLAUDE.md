@@ -68,7 +68,7 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
-> Baseline as of 2026-06-09: local main is merged up to upstream **v0.10.2** (2026-06-09) — 0 upstream commits behind, 61 custom commits ahead. v0.10.2 = label `link` value type + per-OAuth Anthropic account/org visibility + Stop-restores-last-message + Pi prompt-cache fix (Claude path byte-identical).
+> Baseline as of 2026-06-11: local main is merged up to upstream **v0.10.3** (2026-06-09) — 0 upstream commits behind, 63 custom commits ahead. v0.10.3 = Claude Fable 5 added (1M ctx; Opus 4.8 still default) + Agent SDK 0.3.154→0.3.170 + Fable/Mythos-5 thinking resolver (Opus/Sonnet/Haiku byte-identical). bun.lock conflicts on every merge — resolve with `git checkout --theirs bun.lock && bun install`.
 >
 > **Upgrade gotcha (v0.10.2+):** the full umbrella `build` now fails its `lint` gate — v0.10.2's stricter custom rules `craft-links/no-direct-file-open` (DocsPanel/InfoPopover) and `craft-styles/no-nonstandard-shadows` (FabNewChat) flag our pre-existing custom code. Lint is style-only and doesn't affect artifacts; when backend/main changes need a main rebuild, run the build steps individually (`build:main`, `build:preload`, `build:preload-toolbar`, `build:interceptor`, `build:renderer`, `build:copy`) skipping `lint`. `build:validate` references a non-existent `scripts/validate-assets.ts` — harmless, ignore.
 
