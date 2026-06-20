@@ -63,7 +63,7 @@ We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist`
 
 ```bash
 # 远端最新 tag（直连服务器，非缓存）；若高于本地基线 v0.10.1 即说明官方发新版了
-export all_proxy=socks5://127.0.0.1:7893
+export all_proxy=socks5://127.0.0.1:7890
 git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
@@ -81,9 +81,9 @@ git pull origin main
 bun install
 
 # 2. Build the renderer
-export https_proxy=http://127.0.0.1:7893   # proxy if needed
-export http_proxy=http://127.0.0.1:7893
-export all_proxy=socks5://127.0.0.1:7893
+export https_proxy=http://127.0.0.1:7890   # proxy if needed
+export http_proxy=http://127.0.0.1:7890
+export all_proxy=socks5://127.0.0.1:7890
 bun run --filter '@craft-agent/electron' build:renderer
 
 # 3. Quit Craft Agents (Cmd+Q), then run the patch script
@@ -121,4 +121,4 @@ bun run electron:dev
 
 - Apple Silicon (Mac16,8, M4 Pro)
 - macOS 26.3.1
-- Proxy: http://127.0.0.1:7893 (socks5://127.0.0.1:7893)
+- Proxy: http://127.0.0.1:7890 (socks5://127.0.0.1:7890)
