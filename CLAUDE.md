@@ -62,13 +62,13 @@ We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist`
 ### Check whether upstream has a new release first:
 
 ```bash
-# 远端最新 tag（直连服务器，非缓存）；若高于本地基线 v0.10.1 即说明官方发新版了
+# 远端最新 tag（直连服务器，非缓存）；若高于本地基线 v0.10.4 即说明官方发新版了
 export all_proxy=socks5://127.0.0.1:7890
 git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
-> Baseline as of 2026-06-11: local main is merged up to upstream **v0.10.3** (2026-06-09) — 0 upstream commits behind, 63 custom commits ahead. v0.10.3 = Claude Fable 5 added (1M ctx; Opus 4.8 still default) + Agent SDK 0.3.154→0.3.170 + Fable/Mythos-5 thinking resolver (Opus/Sonnet/Haiku byte-identical). bun.lock conflicts on every merge — resolve with `git checkout --theirs bun.lock && bun install`.
+> Baseline as of 2026-06-26: local main is merged up to upstream **v0.10.4** (2026-06) — 0 upstream commits behind, 66 custom commits ahead. v0.10.4 = Pi AI SDK 改名+升级 `@mariozechner/pi-*`→`@earendil-works/pi-*` 0.73.1→0.79.9 (主体改动) + 新增 UI 语言偏好 `preferences-ui-language` + storage 启动迁移 + auto-update 日志改进 (update-quit 走专用 `autoUpdateLog`, #891); Agent SDK 维持 0.3.170, 无新模型 (Fable 5 / Opus 4.8 default 不变)。合并仅 `bun.lock` + `main/index.ts` 自动合并 (main/index.ts 上游改 import/before-quit 日志, 不碰我们的 open-file handler)。bun.lock conflicts on every merge — resolve with `git checkout --theirs bun.lock && bun install`.
 >
 > **Upgrade gotcha (v0.10.2+):** the full umbrella `build` now fails its `lint` gate — v0.10.2's stricter custom rules `craft-links/no-direct-file-open` (DocsPanel/InfoPopover) and `craft-styles/no-nonstandard-shadows` (FabNewChat) flag our pre-existing custom code. Lint is style-only and doesn't affect artifacts; when backend/main changes need a main rebuild, run the build steps individually (`build:main`, `build:preload`, `build:preload-toolbar`, `build:interceptor`, `build:renderer`, `build:copy`) skipping `lint`. `build:validate` references a non-existent `scripts/validate-assets.ts` — harmless, ignore.
 
