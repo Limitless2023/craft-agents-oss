@@ -80,13 +80,19 @@ cd ~/Desktop/Projects/craft-agents-oss
 git pull origin main
 bun install
 
-# 2. Build the renderer
+# 2. Build the renderer (+ main/preload when backend changed)
 export https_proxy=http://127.0.0.1:7890   # proxy if needed
 export http_proxy=http://127.0.0.1:7890
 export all_proxy=socks5://127.0.0.1:7890
 bun run --filter '@craft-agent/electron' build:renderer
 
+# 2b. If the Pi SDK was upgraded (new models in the catalog), REBUILD the
+#     subprocess bundle too — main.cjs and pi-agent-server carry separate SDK
+#     copies and must stay in lockstep (see "Pi SDK version skew" below).
+bun run server:build:subprocess   # rebuilds packages/{pi-agent-server,session-mcp-server}/dist/index.js
+
 # 3. Quit Craft Agents (Cmd+Q), then run the patch script
+#    (patch-app.sh now also syncs resources/<server>/index.js)
 bash patch-app.sh
 
 # 4. Reopen Craft Agents
@@ -96,13 +102,17 @@ bash patch-app.sh
 1. Replaces `main.cjs`, `bootstrap-preload.cjs` in the installed app
 2. Removes old `main-*.js`, `playground-*.js`, `sonner-*.js` and copies our builds
 3. Copies `index.html` directly from build output (avoids fragile hash detection)
-4. Adds `.md` file association to `Info.plist` (with UTI declarations)
-5. Re-signs the app (ad-hoc) and re-registers with Launch Services
+4. Syncs `@anthropic-ai/claude-agent-sdk` + native binary package
+5. **Syncs subprocess server bundles** (`pi-agent-server`, `session-mcp-server`, `bridge-mcp-server`) from `packages/<server>/dist/index.js` → `resources/<server>/index.js`
+6. Adds `.md` file association to `Info.plist` (with UTI declarations)
+7. Re-signs the app (ad-hoc) and re-registers with Launch Services
 
 ### Important notes:
 - **Re-signing is needed** when `Info.plist` is modified (file association step) — the script handles this automatically
 - **No separate app** — we patch the official app in-place; reinstalling official version restores original
 - Building a standalone "Craft L Agents" app fails on macOS 26 due to strict code signing enforcement on ad-hoc signed Electron apps
+- **⚠️ Pi SDK version skew (subprocess vs main):** `resources/pi-agent-server/index.js` bundles its *own copy* of the Pi SDK (`@earendil-works/pi-ai` model catalog) — it is **not** rebuilt by `build:renderer` or `build:main`. After a Pi SDK upgrade, `main.cjs` learns new models (e.g. `deepseek-v4-pro/flash`) and the UI offers them, but a **stale `pi-agent-server` subprocess can't resolve them** → it falls back to the default summarization model (`claude-haiku`) under provider `anthropic`, which has no API key → raw `No API key found for anthropic` → the setup screen shows the misleading **"Provider mismatch during setup"**. Fix: `bun run server:build:subprocess` (rebuilds `pi-agent-server` + `session-mcp-server`) **before** `bash patch-app.sh` so the subprocess SDK matches `main.cjs`. Diagnose with `grep -c deepseek-v4-pro "/Applications/Craft Agents.app/Contents/Resources/app/resources/pi-agent-server/index.js"` (0 = stale).
+- **Stale `.bun` symlinks block `server:build:subprocess`:** an old isolated-linker install can leave dangling `packages/*/node_modules/*` symlinks pointing at a now-missing `node_modules/.bun/` store, which makes `bun build` fail with `File not found …/node_modules/<pkg>`. Clear them (safe — all dangling) before rebuilding: `find packages/*/node_modules -maxdepth 2 -type l ! -exec test -e {} \; -print -delete`
 
 ## Commands
 

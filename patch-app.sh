@@ -5,9 +5,11 @@ APP_ROOT="/Applications/Craft Agents.app/Contents"
 APP_DIST="$APP_ROOT/Resources/app/dist"
 APP_PACKAGE_JSON="$APP_ROOT/Resources/app/package.json"
 APP_NM_ANTHROPIC="$APP_ROOT/Resources/app/node_modules/@anthropic-ai"
-BUILD="/Users/limitless/Desktop/Projects/craft-agents-oss/apps/electron/dist"
-BUILD_PACKAGE_JSON="/Users/limitless/Desktop/Projects/craft-agents-oss/apps/electron/package.json"
-REPO_NM_ANTHROPIC="/Users/limitless/Desktop/Projects/craft-agents-oss/node_modules/@anthropic-ai"
+APP_RESOURCES="$APP_ROOT/Resources/app/resources"
+REPO_ROOT="/Users/limitless/Desktop/Projects/craft-agents-oss"
+BUILD="$REPO_ROOT/apps/electron/dist"
+BUILD_PACKAGE_JSON="$REPO_ROOT/apps/electron/package.json"
+REPO_NM_ANTHROPIC="$REPO_ROOT/node_modules/@anthropic-ai"
 PLIST="$APP_ROOT/Info.plist"
 APP_VERSION="$(node -p "require('$BUILD_PACKAGE_JSON').version")"
 
@@ -56,6 +58,28 @@ if [ -n "$BINARY_PKG" ] && [ -d "$REPO_NM_ANTHROPIC/$BINARY_PKG" ]; then
 else
   echo "WARN: native binary package not found in repo node_modules — run 'bun install' first"
 fi
+
+# ===========================================================================
+# Step 4.6: Sync subprocess server bundles (pi-agent-server etc.)
+# ---------------------------------------------------------------------------
+# 子进程 server bundle 独立于 main.cjs 打包：main.cjs 由 build:main 重建会带上
+# 新 Pi SDK（含新模型目录，如 deepseek-v4），但 resources/pi-agent-server/index.js
+# 不会被 build:renderer / build:main 重建。两者 SDK 不同步即产生「版本偏移」——
+# UI 列出子进程认不出的模型 → 子进程 fallback 到无 key 的 provider →
+# "No API key found for <provider>" → 设置页误报 "Provider mismatch during setup"。
+# 升级 Pi SDK 后必须 `bun run server:build:subprocess` 再 patch，否则子进程落后。
+# ===========================================================================
+echo "Syncing subprocess server bundles..."
+for SERVER in pi-agent-server session-mcp-server bridge-mcp-server; do
+  SRC="$REPO_ROOT/packages/$SERVER/dist/index.js"
+  DEST="$APP_RESOURCES/$SERVER/index.js"
+  if [ -f "$SRC" ] && [ -d "$APP_RESOURCES/$SERVER" ]; then
+    cp "$SRC" "$DEST"
+    echo "  $SERVER: synced ($(node -p "Math.round(require('fs').statSync('$SRC').size/1048576)+'MB'"))"
+  else
+    echo "  $SERVER: skipped (no repo dist or target missing — run 'bun run server:build:subprocess')"
+  fi
+done
 
 echo "Setting app version to $APP_VERSION..."
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST" 2>/dev/null \
