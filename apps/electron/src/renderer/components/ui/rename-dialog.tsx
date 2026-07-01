@@ -37,11 +37,13 @@ export function RenameDialog({
   // Register with modal context so X button / Cmd+W closes this dialog first
   useRegisterModal(open, () => onOpenChange(false))
 
-  // Focus input after dialog opens (avoids Radix Dialog focus race condition)
+  // Focus input after dialog opens (avoids Radix Dialog focus race condition),
+  // 并全选已有标题：重命名几乎总是整体覆写，选中即可直接输入替换
   useEffect(() => {
     if (open) {
       const timer = setTimeout(() => {
         inputRef.current?.focus()
+        inputRef.current?.select()
       }, 0)
       return () => clearTimeout(timer)
     }

@@ -55,6 +55,25 @@ Clicking local file path links in AI messages (e.g. `[report](/Users/foo/report.
 - Modifying `Info.plist` invalidates the Developer ID signature → script re-signs with ad-hoc (`codesign --force --deep --sign -`)
 - Script re-registers with Launch Services (`lsregister -f`) so Finder picks up the file association
 
+### Cmd+R — Rename Current Conversation
+
+`Cmd+R` opens the rename dialog for the currently-active conversation, pre-filled with its title (Enter confirms, Esc cancels). Speeds up the frequent "rename the chat I just created" flow.
+
+**How it works:**
+1. New action `app.renameChat` (`defaultHotkey: 'mod+r'`, category General) in the centralized keyboard registry.
+2. The registry's capture-phase `keydown` listener `preventDefault()`s the match — in dev this suppresses the menu's `CmdOrCtrl+R` reload accelerator (`main/menu.ts`); `Cmd+Shift+R` force-reload is unaffected (matcher checks the Shift modifier). In packaged builds `Cmd+R` was unbound, so zero conflict.
+3. A single headless `RenameSessionShortcut` component (mounted once by `App`, inside `ActionRegistryProvider`) owns the dialog and always renames `sessionSelection.selected` — one registration avoids the multi-panel "first-mounted ChatPage wins" race that inlining into `ChatPage` would cause. Reuses `handleRenameSession` + the controlled `RenameDialog`.
+
+**New files:**
+- `apps/electron/src/renderer/components/app-shell/RenameSessionShortcut.tsx` — headless Cmd+R handler + rename dialog
+
+**Modified files:**
+- `apps/electron/src/renderer/actions/definitions.ts` — added `app.renameChat` action (`mod+r`)
+- `apps/electron/src/renderer/App.tsx` — import + single-instance render of `RenameSessionShortcut`
+- `apps/electron/src/renderer/components/KeyboardShortcutsDialog.tsx` — removed the stale, never-implemented bare-`R` "Rename session" entry (the real `⌘R` now auto-appears in the General section from the registry)
+
+**Design spec:** `docs/superpowers/specs/2026-07-02-cmd-r-rename-session-design.md`
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

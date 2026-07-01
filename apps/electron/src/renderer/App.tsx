@@ -71,6 +71,7 @@ import { useLinkInterceptor, type FilePreviewState } from '@/hooks/useLinkInterc
 import { useTransportConnectionState } from '@/hooks/useTransportConnectionState'
 import { useStaleSessionRecovery } from '@/hooks/useStaleSessionRecovery'
 import { TransportConnectionBanner, shouldShowTransportConnectionBanner } from '@/components/app-shell/TransportConnectionBanner'
+import { RenameSessionShortcut } from '@/components/app-shell/RenameSessionShortcut'
 import { getFileManagerName } from '@/lib/platform'
 import { rendererLog } from '@/lib/logger'
 import { ActionRegistryProvider } from '@/actions'
@@ -2118,6 +2119,8 @@ export default function App() {
               onConfirm={executeReset}
               onCancel={() => setShowResetDialog(false)}
             />
+            {/* Cmd+R → 重命名当前会话（单例，规避多面板 handler 竞争；当前会话在组件内解析） */}
+            <RenameSessionShortcut onRename={handleRenameSession} />
           </div>
 
           {/* File preview overlay — rendered by the link interceptor when a previewable file is clicked */}

@@ -18,6 +18,13 @@ export const actions = {
     defaultHotkey: 'mod+t',
     category: 'General',
   },
+  'app.renameChat': {
+    id: 'app.renameChat',
+    label: 'Rename Chat',
+    description: 'Rename the current conversation',
+    defaultHotkey: 'mod+r',
+    category: 'General',
+  },
   'app.settings': {
     id: 'app.settings',
     label: 'Settings',
