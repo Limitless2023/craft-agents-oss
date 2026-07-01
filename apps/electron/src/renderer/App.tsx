@@ -2119,16 +2119,8 @@ export default function App() {
               onConfirm={executeReset}
               onCancel={() => setShowResetDialog(false)}
             />
-            {/* Cmd+R → 重命名当前会话（单例，规避多面板 handler 竞争） */}
-            <RenameSessionShortcut
-              currentSessionId={sessionSelection.selected}
-              currentName={
-                sessionSelection.selected
-                  ? sessionMetaMap.get(sessionSelection.selected)?.name ?? ""
-                  : ""
-              }
-              onRename={handleRenameSession}
-            />
+            {/* Cmd+R → 重命名当前会话（单例，规避多面板 handler 竞争；当前会话在组件内解析） */}
+            <RenameSessionShortcut onRename={handleRenameSession} />
           </div>
 
           {/* File preview overlay — rendered by the link interceptor when a previewable file is clicked */}
