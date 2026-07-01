@@ -71,6 +71,7 @@ import { useLinkInterceptor, type FilePreviewState } from '@/hooks/useLinkInterc
 import { useTransportConnectionState } from '@/hooks/useTransportConnectionState'
 import { useStaleSessionRecovery } from '@/hooks/useStaleSessionRecovery'
 import { TransportConnectionBanner, shouldShowTransportConnectionBanner } from '@/components/app-shell/TransportConnectionBanner'
+import { RenameSessionShortcut } from '@/components/app-shell/RenameSessionShortcut'
 import { getFileManagerName } from '@/lib/platform'
 import { rendererLog } from '@/lib/logger'
 import { ActionRegistryProvider } from '@/actions'
@@ -2117,6 +2118,16 @@ export default function App() {
               open={showResetDialog}
               onConfirm={executeReset}
               onCancel={() => setShowResetDialog(false)}
+            />
+            {/* Cmd+R → 重命名当前会话（单例，规避多面板 handler 竞争） */}
+            <RenameSessionShortcut
+              currentSessionId={sessionSelection.selected}
+              currentName={
+                sessionSelection.selected
+                  ? sessionMetaMap.get(sessionSelection.selected)?.name ?? ""
+                  : ""
+              }
+              onRename={handleRenameSession}
             />
           </div>
 

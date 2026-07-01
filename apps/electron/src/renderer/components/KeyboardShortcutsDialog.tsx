@@ -42,7 +42,6 @@ function useComponentSpecificSections(): ShortcutSection[] {
       shortcuts: [
         { keys: ['Enter'], description: t('shortcuts.focusChatInput') },
         { keys: ['Delete'], description: t('shortcuts.deleteSession') },
-        { keys: ['R'], description: t('shortcuts.renameSession') },
         { keys: ['Right-click'], description: t('shortcuts.openContextMenu') },
         { keys: [isMac ? '⌥' : 'Alt', 'Click'], description: t('shortcuts.addFilterExcluded') },
       ],
