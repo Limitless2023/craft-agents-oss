@@ -25,13 +25,13 @@
 ```ts
 interface Favorite {
   messageId: string      // 唯一键：一条回复一条收藏
-  sessionId: string      // 跳回原对话用
-  workspaceId: string    // 会话 workspace 作用域
+  sessionId: string      // 跳回原对话用（navigate(allSessions(sessionId)) 只需它）
   sessionTitle: string   // 列表展示标题
   contentSnapshot: string// 收藏瞬间的回复 markdown：列表摘要 + 原对话已删的兜底
   createdAt: number      // 排序（倒序）
 }
 ```
+> 规划期精简：去掉 `workspaceId`（跳转仅用 `sessionId`，YAGNI）。
 
 **唯一键 = `messageId`** → "是否已收藏" = store 里有没有这个 id；toggle = 有则删、无则增。
 **消除所有去重/特殊分支**——这是本设计的"好品味"核心。
@@ -42,11 +42,12 @@ interface Favorite {
 
 ```ts
 // 单一真相源：localStorage + 内存快照 + 订阅
-getSnapshot(): Favorite[]
+getFavorites(): Favorite[]
 isFavorited(messageId: string): boolean
-toggle(fav: Favorite): void          // 有则 remove，无则 add
-remove(messageId: string): void
-subscribe(cb: () => void): () => void // 含跨窗口 storage 事件
+toggleFavorite(fav: Favorite): void        // 有则 remove，无则 add
+removeFavorite(messageId: string): void
+subscribeFavorites(cb: () => void): () => void // 含跨窗口 storage 事件
+// 纯逻辑拆到 favorites-core.ts（parse/toggle/remove/isFavorited/sort），bun test 覆盖
 ```
 
 React 侧用 `useSyncExternalStore(subscribe, getSnapshot)` 暴露 `useFavorites()` /
@@ -66,8 +67,8 @@ React 侧用 `useSyncExternalStore(subscribe, getSnapshot)` 暴露 `useFavorites
 ### 4.2 接线 — `apps/electron/src/renderer/components/app-shell/ChatDisplay.tsx`
 
 - TurnCard 渲染在 1710–1838 行。ChatDisplay 订阅 store（唯一集成点），按 turn 计算 `isFavorited`。
-- `onToggleFavorite` 在此构造完整 `Favorite` 负载：`messageId`(=`response.messageId`)、
-  `sessionId`(=`session.id`)、`workspaceId`、`sessionTitle`、`contentSnapshot`(=`response.text`)、`createdAt`。
+- `onToggleFavorite` 在此构造 `Favorite` 负载：`messageId`(=`response.messageId`)、
+  `sessionId`(=`session.id`)、`sessionTitle`(=`session.title`)、`contentSnapshot`(=`response.text`)、`createdAt`。
 
 ### 4.3 侧边栏入口 — `apps/electron/src/renderer/components/app-shell/AppShell.tsx`
 
@@ -79,7 +80,7 @@ React 侧用 `useSyncExternalStore(subscribe, getSnapshot)` 暴露 `useFavorites
 
 - 新增 `interface FavoritesNavigationState { navigator: 'favorites' }` 与守卫
   `isFavoritesNavigation(s): s is FavoritesNavigationState`，并入 `NavigationState` 联合（872–877）。
-- `SessionsNavigationState` 增加可选 `highlightMessageId?: string`（见 §5）。
+- 会话态 `SessionsNavigationState` **不改**——高亮走独立信号 store（见 §5，规划期从 query-param 方案修订而来）。
 
 ### 4.5 路由 — `route-parser.ts` / `routes.ts`
 
@@ -96,24 +97,34 @@ React 侧用 `useSyncExternalStore(subscribe, getSnapshot)` 暴露 `useFavorites
 
 - `useFavorites()` 取列表，按 `createdAt` 倒序。
 - 每张卡片：`sessionTitle` + 内容摘要（`contentSnapshot` 截断）+ 相对时间 + 取消收藏按钮（实心红心，点击 `remove`）。
-- **点击卡片 = 跳回原对话**：`navigate(routes.view.allSessions(sessionId) + '?highlight=' + messageId)`。
+- **点击卡片 = 跳回原对话**：`requestHighlight(sessionId, messageId)` + `navigate(routes.view.allSessions(sessionId))`（干净路由，不带 query）。
   用 `allSessions` 视图（含全部会话，必能命中）。
 - 空状态：友好文案 + 提示「在任意回复下点心形即可收藏」。
 
 ## 5. 跳回原对话 + 定位高亮（方案 A 核心数据流）
 
-复用既有基建，新增极少：
+> **规划期修订**：原设计走 `?highlight=` query-param，但探查发现复合路由（`allSessions/session/{id}`）
+> 的 `parseCompoundRoute` 只 `split('/')` 不剥离 `?`，会把 details id 污染成 `{id}?highlight={mid}`；
+> 且 `ParsedCompoundRoute` 无 `params` 字段（query 仅在 action 分支解析）、`navigate` 无 `{replace}`。
+> 硬走它需改 `route-parser.ts` + `NavigationContext.tsx` 两个上游核心文件。改用**独立高亮信号 store**——
+> 只碰 `ChatDisplay` + 新 store + 收藏页，UX 不变，blast radius 更小、更贴合"纯 renderer"基线。
 
-1. **携带参数**：收藏页跳转时拼 `?highlight=<messageId>`。`route-parser` 已解析 query 到 `parsed.params`（348–372）。
-2. **透传**：`NavigationContext` 把 `params.highlight` 填入 `SessionsNavigationState.highlightMessageId`，
-   `MainContentPanel` 作为 prop 传给 `ChatDisplay`。（现状：view 路由不读 query param → 本功能补这一段。）
-3. **滚动**：`ChatDisplay` 用 `useEffect` 监听 `highlightMessageId`，调用**已存在**的
-   `scrollToFollowUpTurn({ messageId })`（1410–1450，自带分页懒加载 + 居中 `scrollIntoView`）。
-4. **高亮**：复用现有 ring 样式模式（搜索命中用 `ring-2 ring-info`，见 1623–1624）。对目标 turn 容器（1677）
-   施加临时 `ring-2 ring-red-400 transition-all duration-500`，`setTimeout` ~2s 后清除 → 自然淡出。**无需新建动画 keyframe。**
-5. **一次性语义**：应用高亮后，用 replace 导航去掉 `?highlight=` query，避免刷新/返回时重复触发（用 ref 守卫亦可）。
+新建 `favorites-highlight-store.ts`（**临时/非持久化**，仿 store 模式的模块单例）：
+`requestHighlight(sessionId, messageId)` / `peekHighlight(sessionId)` / `consumeHighlight(sessionId)` / `subscribeHighlight(cb)`。
 
-边界：`assistantTurnIndexByMessageId` 查不到（消息/会话已删）→ 静默不滚动；
+数据流（复用既有基建，新增极少）：
+
+1. **请求**：收藏页点击卡片 → `requestHighlight(sessionId, messageId)`，随后 `navigate(routes.view.allSessions(sessionId))`。
+2. **消费**：`ChatDisplay` 本就持有 `session.id`。用 `useEffect`（依赖 `assistantTurnIndexByMessageId`）
+   `peek` 本会话的待高亮 messageId；当消息已加载（map 命中）时 `consume` 并设 `highlightMessageId` state。
+   订阅 `subscribeHighlight` 以覆盖"会话已挂载"场景。
+3. **滚动**：抽出 `scrollToMessage(messageId)`（从 `scrollToFollowUpTurn` 提取——其 `annotationId` 不参与滚动，
+   1410–1450 自带分页懒加载 + 居中 `scrollIntoView`），`scrollToFollowUpTurn` 改为委托它（DRY）。
+4. **高亮**：复用现有 ring 样式（搜索命中用 `ring-2 ring-info`，见 assistant wrapper 1699–1709，已带 `transition-all duration-200`）。
+   对目标 turn 施加 `ring-2 ring-primary ring-offset-2 ring-offset-background`，`setTimeout` ~2s 后清 state → 自然淡出。**无需新建动画 keyframe。**
+5. **一次性语义**：`consume` 后 `pending` 即清空 → 刷新/返回不再触发；不改 URL、不碰导航栈。
+
+边界：`assistantTurnIndexByMessageId` 查不到（消息/会话已删）→ effect 静默等待；
 卡片仍可读 `contentSnapshot`（兜底，不让点击"死掉"）。
 
 ## 6. i18n
@@ -141,5 +152,14 @@ React 侧用 `useSyncExternalStore(subscribe, getSnapshot)` 暴露 `useFavorites
 
 ## 10. 受影响文件汇总
 
-**新建：** `favorites/favorites-store.ts`、`favorites/FavoritesPage.tsx`
-**改：** `TurnCard.tsx`、`ChatDisplay.tsx`、`AppShell.tsx`、`types.ts`、`route-parser.ts`、`routes.ts`、`MainContentPanel.tsx`、i18n 文案文件
+**新建（`apps/electron/src/renderer/components/favorites/`）：**
+`favorites-core.ts`(+test)、`favorites-store.ts`、`favorites-highlight-store.ts`(+test)、`FavoritesPage.tsx`、`CLAUDE.md`(L2)
+
+**改：**
+- 心形：`packages/ui/src/components/chat/TurnCard.tsx`、`apps/electron/.../ChatDisplay.tsx`
+- 导航器：`apps/electron/src/shared/types.ts`、`route-parser.ts`、`routes.ts`、`app-shell/AppShell.tsx`、`app-shell/MainContentPanel.tsx`
+- 高亮：`ChatDisplay.tsx`（抽 `scrollToMessage` + 消费 effect + ring）
+- i18n：`packages/shared/src/i18n/locales/en.json`、`zh-Hans.json`（扁平点分键）
+- 文档：`craft-agents-oss/CLAUDE.md`（新增 Message Favorites 小节）
+
+**不改（相较原 §5 query-param 方案）：** `NavigationContext.tsx`、会话态 `SessionsNavigationState`、`ChatPage.tsx`。
