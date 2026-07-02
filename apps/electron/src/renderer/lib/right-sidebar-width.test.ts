@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 ./right-sidebar-width 的 clampRightSidebarWidth + 常量
+ * [INPUT]: 依赖 ./right-sidebar-width 的 clampRightSidebarWidth + isUnderSpacePressure + 常量
  * [OUTPUT]: 无对外导出；仅测试断言
  * [POS]: 右侧栏宽度 clamp 纯逻辑的回归测试；bun test 直接运行，无 DOM
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -7,6 +7,7 @@
 import { test, expect } from 'bun:test'
 import {
   clampRightSidebarWidth,
+  isUnderSpacePressure,
   RIGHT_SIDEBAR_MIN_WIDTH,
   PREVIEW_MAX_WIDTH,
   OTHER_PANEL_MAX_WIDTH,
@@ -47,4 +48,23 @@ test('non-preview panels are capped at OTHER_PANEL_MAX_WIDTH', () => {
 test('reservedLeft defaults to 0 when omitted', () => {
   // 1200 - 0 - 320 = 880
   expect(clampRightSidebarWidth(1000, 'preview', 1200)).toBe(880)
+})
+
+// ============================================================
+// isUnderSpacePressure — 左栏显示时 preview 能否达到意图宽度？
+// room = innerWidth - reservedLeftWithSidebar - 320(min chat)
+// ============================================================
+test('isUnderSpacePressure: fits with sidebar → no pressure', () => {
+  // room = 1920 - 538 - 320 = 1062; intentWidth=600 ≤ 1062 → false
+  expect(isUnderSpacePressure(600, 1920, 538)).toBe(false)
+})
+
+test('isUnderSpacePressure: does not fit → pressure', () => {
+  // room = 1200 - 538 - 320 = 342; intentWidth=343 > 342 → true
+  expect(isUnderSpacePressure(343, 1200, 538)).toBe(true)
+})
+
+test('isUnderSpacePressure: boundary (exact fit) → no pressure (strict >)', () => {
+  // room = 1200 - 538 - 320 = 342; intentWidth=342 → 342 > 342 = false
+  expect(isUnderSpacePressure(342, 1200, 538)).toBe(false)
 })

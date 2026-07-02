@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 无外部依赖（纯函数 + 常量）
- * [OUTPUT]: clampRightSidebarWidth + 宽度常量（PREVIEW_MAX_WIDTH / OTHER_PANEL_MAX_WIDTH / RIGHT_SIDEBAR_MIN_WIDTH / MIN_MAIN_CONTENT_WIDTH）
+ * [OUTPUT]: clampRightSidebarWidth + isUnderSpacePressure + 宽度常量（PREVIEW_MAX_WIDTH / OTHER_PANEL_MAX_WIDTH / RIGHT_SIDEBAR_MIN_WIDTH / MIN_MAIN_CONTENT_WIDTH）
  * [POS]: 右侧栏（Preview/Info）宽度的单一 clamp 规则；AppShell 拖拽 + 渲染派生共用。
  *        约束 = "给聊天区留够 MIN_MAIN_CONTENT_WIDTH"，而非固定窗口比例——否则小屏上左侧固定列会把聊天压没。
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -14,6 +14,18 @@ export const PREVIEW_MAX_WIDTH = 1000        // Preview：宽阅读栏
 export const OTHER_PANEL_MAX_WIDTH = 480      // Info/docs：文件树/列表，不需过宽
 // 右侧栏永远不能把主内容（聊天）压到这个宽度以下
 export const MIN_MAIN_CONTENT_WIDTH = 320
+
+// ============================================================
+// 显示左栏时 preview 能否达到意图宽度还留够聊天？留不下 = 有压力。
+// ============================================================
+export function isUnderSpacePressure(
+  intentWidth: number,             // rightSidebarWidth（用户意图）
+  innerWidth: number,
+  reservedLeftWithSidebar: number, // 含左栏在内的左侧占用（sidebar+nav+gaps）
+): boolean {
+  const roomForPreview = innerWidth - reservedLeftWithSidebar - MIN_MAIN_CONTENT_WIDTH
+  return intentWidth > roomForPreview
+}
 
 // ============================================================
 // 单一真相：给定 意图宽度 + 面板类型 + 当前窗宽 + 左侧已占用宽度，返回可用宽度。
