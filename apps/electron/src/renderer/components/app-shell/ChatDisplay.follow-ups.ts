@@ -26,6 +26,10 @@ export type PendingFollowUpAnnotation = {
   createdAt: number
   color?: string
   meta?: Record<string, unknown>
+  /** Preview follow-ups only: the source doc's display name, prefixed onto the quote. */
+  sourceLabel?: string
+  /** Preview follow-ups only: absolute file path (routes "mark sent" to the preview store). */
+  previewFilePath?: string
 }
 
 /**
@@ -55,8 +59,9 @@ export function formatFollowUpSection(
 
   const items = followUps.map((followUp, idx) => {
     const quoteText = normalizeFollowUpText(followUp.selectedText)
+    const labelled = followUp.sourceLabel ? `(${followUp.sourceLabel}) ${quoteText}` : quoteText
     return [
-      `> [#${idx + 1}] ${quoteText}`,
+      `> [#${idx + 1}] ${labelled}`,
       `→ ${followUp.note}`,
     ].join('\n')
   })
