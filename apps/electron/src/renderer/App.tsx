@@ -28,6 +28,7 @@ import { useUpdateChecker } from '@/hooks/useUpdateChecker'
 import { NavigationProvider, useNavigation } from '@/contexts/NavigationContext'
 import { sidebarDocsAtomFamily, openSidebarDocTab } from '@/atoms/sidebar-docs'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
+import { usePreviewAnnotations } from '@/atoms/preview-annotations'
 import { navigate, routes } from './lib/navigate'
 import { attachmentFromContentRef, toDraftRef } from './lib/drafts'
 import { stripMarkdown } from './utils/text'
@@ -2188,6 +2189,9 @@ function FilePreviewRenderer({
   // │ right sidebar to 'preview', and closes the overlay.                │
   // └─────────────────────────────────────────────────────────────────────┘
   const focusedSessionId = useAtomValue(focusedSessionIdAtom)
+  // ── 全屏 overlay 注解 hook（无条件调用，遵守 React Hooks 规则） ──
+  const overlayFilePath = 'filePath' in state ? state.filePath : ''
+  const [previewAnnotations, previewAnnoActions] = usePreviewAnnotations(focusedSessionId ?? '', overlayFilePath)
   const setSidebarDocs = useSetAtom(sidebarDocsAtomFamily(focusedSessionId ?? '__none__'))
   const { updateRightSidebar } = useNavigation()
   const handleDockToSidebar = useCallback((filePath: string) => {
@@ -2252,6 +2256,13 @@ function FilePreviewRenderer({
           filePath={state.filePath}
           variant={isPlanFile ? 'plan' : 'response'}
           onDockToSidebar={handleDockToSidebar}
+          // 有 session 时启用注解（select→note→highlight→随下条消息发送）
+          sessionId={focusedSessionId ?? undefined}
+          messageId={focusedSessionId ? state.filePath : undefined}
+          annotations={previewAnnotations}
+          onAddAnnotation={previewAnnoActions.add}
+          onRemoveAnnotation={previewAnnoActions.remove}
+          onUpdateAnnotation={previewAnnoActions.update}
         />
       )
     }

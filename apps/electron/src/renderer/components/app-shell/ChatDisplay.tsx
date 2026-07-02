@@ -78,6 +78,9 @@ import { handleErrorMessageAction } from "./error-message-actions"
 import { useFavorites, toggleFavorite, type Favorite } from '../favorites/favorites-store'
 import { peekHighlight, consumeHighlight, subscribeHighlight } from '../favorites/favorites-highlight-store'
 
+// 路径末段提取（模块级稳定引用，无需每次渲染重新分配）
+const basename = (p: string) => p.split('/').pop() || p
+
 // ============================================================================
 // CSS Custom Highlight API helper
 // ============================================================================
@@ -249,6 +252,7 @@ import {
   truncateForChipTooltip,
   type PendingFollowUpAnnotation,
 } from './ChatDisplay.follow-ups'
+import { usePreviewPendingFollowUps, useMarkPreviewFollowUpsSent } from '../../atoms/preview-annotations'
 
 /**
  * Imperative handle exposed via forwardRef for navigation between matches
@@ -537,6 +541,10 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     nonce: number
   } | null>(null)
   const followUpOpenNonceRef = React.useRef(0)
+
+  // Preview panel follow-up hooks（渲染层 store，无后端消息可挂）
+  const previewPendingRaw = usePreviewPendingFollowUps(session?.id ?? '')
+  const markPreviewFollowUpsSent = useMarkPreviewFollowUpsSent(session?.id ?? '')
 
   // Navigation for session branching
   const { navigate } = useNavigation()
@@ -1081,11 +1089,10 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   const lastMessageRole = lastMessage?.role
 
   const pendingFollowUpAnnotations = useMemo<PendingFollowUpAnnotation[]>(() => {
-    if (!session?.messages?.length) return []
-
     const pending: PendingFollowUpAnnotation[] = []
+    const messages = session?.messages ?? []
 
-    for (const message of session.messages) {
+    for (const message of messages) {
       if (message.role !== 'assistant' && message.role !== 'plan') continue
       if (!message.annotations?.length) continue
 
@@ -1106,8 +1113,27 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
       }
     }
 
+    // ------------------------------------------------------------------
+    // 合并预览面板 follow-up（filePath 充当 messageId，不走后端）
+    // ------------------------------------------------------------------
+    for (const { filePath, annotation } of previewPendingRaw) {
+      const note = getAnnotationNoteText(annotation)
+      if (!note) continue
+      pending.push({
+        messageId: filePath,               // filePath 充当 messageId
+        annotationId: annotation.id,
+        note,
+        selectedText: extractAnnotationSelectedText(annotation, ''),  // exact 自带，不需原文
+        createdAt: annotation.updatedAt ?? annotation.createdAt,
+        color: annotation.style?.color,
+        meta: asRecord(annotation.meta) ?? undefined,
+        sourceLabel: basename(filePath),
+        previewFilePath: filePath,
+      })
+    }
+
     return pending.sort((a, b) => a.createdAt - b.createdAt)
-  }, [session?.messages])
+  }, [session?.messages, previewPendingRaw])
 
   const followUpInputItems = useMemo(() => {
     return pendingFollowUpAnnotations.map((followUp, idx) => ({
@@ -1268,25 +1294,24 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     // clears these markers and the annotation becomes pending again.
     if (session && pendingFollowUpAnnotations.length > 0) {
       const sentAt = Date.now()
-      void Promise.all(pendingFollowUpAnnotations.map((followUp) => {
+      const messageItems = pendingFollowUpAnnotations.filter(f => !f.previewFilePath)
+      const previewItems = pendingFollowUpAnnotations.filter(f => f.previewFilePath)
+
+      // preview follow-ups → 渲染层 store（无会话消息可挂，后端会拒绝非消息标注）
+      markPreviewFollowUpsSent(
+        previewItems.map(f => ({ filePath: f.previewFilePath!, annotationId: f.annotationId, note: f.note })),
+        sentAt,
+      )
+
+      // message follow-ups → 既有后端标注（行为不变）
+      void Promise.all(messageItems.map((followUp) => {
         const currentMeta = followUp.meta ?? {}
         const currentFollowUpMeta = asRecord(currentMeta.followUp) ?? {}
-
         return window.electronAPI.sessionCommand(session.id, {
           type: 'updateAnnotation',
           messageId: followUp.messageId,
           annotationId: followUp.annotationId,
-          patch: {
-            meta: {
-              ...currentMeta,
-              followUp: {
-                ...currentFollowUpMeta,
-                text: followUp.note,
-                lastSentAt: sentAt,
-                lastSentText: followUp.note,
-              },
-            },
-          },
+          patch: { meta: { ...currentMeta, followUp: { ...currentFollowUpMeta, text: followUp.note, lastSentAt: sentAt, lastSentText: followUp.note } } },
         })
       })).catch((error) => {
         console.error('[ChatDisplay] Failed to mark follow-up annotations as sent:', error)
