@@ -619,11 +619,21 @@ function AppShellContent({
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
-  // Displayed width = persisted intent clamped to the current window (single rule).
+  // Space consumed by everything LEFT of the right sidebar (columns + gaps),
+  // honoring hide/collapse — mirrors the sidebarWidth (~line 2685) and
+  // navigatorWidth (~line 3446) props handed to PanelStackContainer.
+  const effLeftSidebarWidth = effectiveSidebarAndNavigatorHidden ? 0 : (isSidebarVisible ? sidebarWidth : 0)
+  const effNavWidth = (isFavoritesNavigation(navState) || effectiveSidebarAndNavigatorHidden) ? 0 : sessionListWidth
+  const reservedLeftWidth =
+    effLeftSidebarWidth + effNavWidth + PANEL_EDGE_INSET + PANEL_GAP +
+    (effLeftSidebarWidth > 0 ? PANEL_GAP : 0) + (effNavWidth > 0 ? PANEL_GAP : 0)
+  // Displayed width = persisted intent clamped so the chat keeps its minimum,
+  // accounting for the left columns and the current window (re-clamps on resize).
   const displayedRightSidebarWidth = clampRightSidebarWidth(
     rightSidebarWidth,
     rightSidebarPanel?.type,
     windowWidth,
+    reservedLeftWidth,
   )
   // ┌─────────────────────────────────────────────────────────────────────┐
   // │ Info popover state — only used when Preview is the active sidebar.  │
@@ -1354,11 +1364,12 @@ function AppShellContent({
         }
       } else if (isResizing === 'right-sidebar') {
         // Right sidebar resizes from the right edge inward; clamp via the shared
-        // rule (type cap + 60%-window cap, min 180). See @/lib/right-sidebar-width.
+        // rule (type cap + reserve for left columns & min chat). See @/lib/right-sidebar-width.
         const newWidth = clampRightSidebarWidth(
           window.innerWidth - e.clientX,
           rightSidebarPanel?.type,
           window.innerWidth,
+          reservedLeftWidth,
         )
         setRightSidebarWidth(newWidth)
         if (rightSidebarHandleRef.current) {
@@ -1396,6 +1407,7 @@ function AppShellContent({
     rightSidebarWidth,
     isSidebarVisible,
     rightSidebarPanel,
+    reservedLeftWidth,
   ])
 
   // Spring transition config - shared between sidebar and header

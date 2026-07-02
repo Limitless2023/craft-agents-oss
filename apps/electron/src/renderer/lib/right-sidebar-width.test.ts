@@ -12,28 +12,39 @@ import {
   OTHER_PANEL_MAX_WIDTH,
 } from './right-sidebar-width'
 
-test('preview panel is capped at PREVIEW_MAX_WIDTH on a wide window', () => {
-  // 1920 * 0.6 = 1152 > 1000 → fixed cap wins
-  expect(clampRightSidebarWidth(1000, 'preview', 1920)).toBe(PREVIEW_MAX_WIDTH)
-  expect(clampRightSidebarWidth(5000, 'preview', 1920)).toBe(PREVIEW_MAX_WIDTH)
+// reservedLeft ≈ sidebar(220) + sessionList(300) + gaps(~18) = 538 (both left columns open)
+const LEFT = 538
+
+test('wide screen with both columns open still allows the full preview cap', () => {
+  // room = 1920 - 538 - 320(min chat) = 1062 > 1000 → type cap wins
+  expect(clampRightSidebarWidth(1000, 'preview', 1920, LEFT)).toBe(PREVIEW_MAX_WIDTH)
 })
 
-test('preview panel is capped at 60% window on a narrow window (the bug case)', () => {
-  // stale stored 1000 on a 1512 screen → floor(1512*0.6)=907
-  expect(clampRightSidebarWidth(1000, 'preview', 1512)).toBe(907)
+test('small screen: preview shrinks so the chat keeps its 320px minimum (the bug)', () => {
+  // room = 1200 - 538 - 320 = 342 → capped at 342, not 60%*1200=720
+  expect(clampRightSidebarWidth(1000, 'preview', 1200, LEFT)).toBe(342)
+})
+
+test('hiding the left columns gives the preview more room (dynamic reserve)', () => {
+  // same 1200px window but columns hidden → room = 1200 - 0 - 320 = 880
+  expect(clampRightSidebarWidth(1000, 'preview', 1200, 0)).toBe(880)
+})
+
+test('tiny window floors the panel at the minimum width', () => {
+  // room = 900 - 538 - 320 = 42 < MIN → floored at MIN
+  expect(clampRightSidebarWidth(1000, 'preview', 900, LEFT)).toBe(RIGHT_SIDEBAR_MIN_WIDTH)
 })
 
 test('width never drops below the minimum', () => {
-  expect(clampRightSidebarWidth(50, 'preview', 1920)).toBe(RIGHT_SIDEBAR_MIN_WIDTH)
-  expect(clampRightSidebarWidth(0, 'docs', 1920)).toBe(RIGHT_SIDEBAR_MIN_WIDTH)
+  expect(clampRightSidebarWidth(50, 'preview', 1920, LEFT)).toBe(RIGHT_SIDEBAR_MIN_WIDTH)
 })
 
 test('non-preview panels are capped at OTHER_PANEL_MAX_WIDTH', () => {
-  expect(clampRightSidebarWidth(1000, 'docs', 1920)).toBe(OTHER_PANEL_MAX_WIDTH)
-  expect(clampRightSidebarWidth(300, undefined, 1920)).toBe(300)
+  expect(clampRightSidebarWidth(1000, 'docs', 1920, LEFT)).toBe(OTHER_PANEL_MAX_WIDTH)
+  expect(clampRightSidebarWidth(300, undefined, 1920, LEFT)).toBe(300)
 })
 
-test('non-preview also respects the 60% window floor on tiny windows', () => {
-  // 700 * 0.6 = 420 < 480 → window fraction wins
-  expect(clampRightSidebarWidth(480, 'docs', 700)).toBe(420)
+test('reservedLeft defaults to 0 when omitted', () => {
+  // 1200 - 0 - 320 = 880
+  expect(clampRightSidebarWidth(1000, 'preview', 1200)).toBe(880)
 })
