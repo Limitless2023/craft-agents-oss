@@ -23,6 +23,7 @@ import {
   Pencil,
   FilePenLine,
   GitBranch,
+  Heart,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Markdown } from '../markdown'
@@ -350,6 +351,10 @@ export interface TurnCardProps {
   compactMode?: boolean
   /** Callback to branch the session from a specific message */
   onBranch?: (messageId: string, options?: { newPanel?: boolean }) => void
+  /** Whether this turn's response is currently favorited */
+  isFavorited?: boolean
+  /** Toggle favorite state for this turn's response */
+  onToggleFavorite?: () => void
   /** Callback to add an annotation to a response message */
   onAddAnnotation?: (messageId: string, annotation: AnnotationV1) => void
   /** Callback to remove a persisted annotation from a response message */
@@ -1414,6 +1419,10 @@ export interface ResponseCardProps {
   compactMode?: boolean
   /** Callback to branch the session from this response */
   onBranch?: (options?: { newPanel?: boolean }) => void
+  /** Whether this turn's response is currently favorited */
+  isFavorited?: boolean
+  /** Toggle favorite state for this turn's response */
+  onToggleFavorite?: () => void
   /** Callback to add annotation from selected text */
   onAddAnnotation?: (messageId: string, annotation: AnnotationV1) => void
   /** Callback to remove persisted annotation */
@@ -1662,6 +1671,8 @@ export function ResponseCard({
   showAcceptPlan = true,
   compactMode = false,
   onBranch,
+  isFavorited,
+  onToggleFavorite,
   onAddAnnotation,
   onRemoveAnnotation,
   onUpdateAnnotation,
@@ -2548,6 +2559,19 @@ export function ResponseCard({
                     <span>Markdown</span>
                   </button>
                 )}
+                {onToggleFavorite && messageId && !isStreaming && (
+                  <button
+                    onClick={onToggleFavorite}
+                    className={cn(
+                      "turn-action-btn flex items-center gap-1.5 transition-colors select-none",
+                      isFavorited ? "text-red-500" : "text-muted-foreground hover:text-foreground",
+                      "focus:outline-none focus-visible:underline"
+                    )}
+                  >
+                    <Heart className={cn(SIZE_CONFIG.iconSize, isFavorited && "fill-current")} />
+                    <span>{t("common.favorite")}</span>
+                  </button>
+                )}
               </div>
 
               {/* Right side */}
@@ -2788,6 +2812,8 @@ export const TurnCard = React.memo(function TurnCard({
   animateResponse = false,
   compactMode = false,
   onBranch,
+  isFavorited,
+  onToggleFavorite,
   onAddAnnotation,
   onRemoveAnnotation,
   onUpdateAnnotation,
@@ -3193,6 +3219,8 @@ export const TurnCard = React.memo(function TurnCard({
                 isLastResponse={isLastResponse}
                 compactMode={compactMode}
                 onBranch={onBranch && response.messageId ? (options?: { newPanel?: boolean }) => onBranch(response.messageId!, options) : undefined}
+                isFavorited={isFavorited}
+                onToggleFavorite={onToggleFavorite}
                 sendMessageKey={sendMessageKey}
                 hasActiveFollowUpAnnotations={hasActiveFollowUpAnnotations}
                 openAnnotationRequest={openAnnotationRequest}
@@ -3225,6 +3253,8 @@ export const TurnCard = React.memo(function TurnCard({
             isLastResponse={isLastResponse}
             compactMode={compactMode}
             onBranch={onBranch && response.messageId ? (options?: { newPanel?: boolean }) => onBranch(response.messageId!, options) : undefined}
+            isFavorited={isFavorited}
+            onToggleFavorite={onToggleFavorite}
             sendMessageKey={sendMessageKey}
             hasActiveFollowUpAnnotations={hasActiveFollowUpAnnotations}
             openAnnotationRequest={openAnnotationRequest}
@@ -3271,6 +3301,9 @@ export const TurnCard = React.memo(function TurnCard({
 
   // Re-render when active follow-up annotation state changes (plan CTA label)
   if (prev.hasActiveFollowUpAnnotations !== next.hasActiveFollowUpAnnotations) return false
+
+  // Re-render when favorite state changes (heart button appearance)
+  if (prev.isFavorited !== next.isFavorited) return false
 
   // For complete, non-streaming turns: skip re-render only when both
   // session and turn identities match. Prevents stale local UI state from
