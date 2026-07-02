@@ -592,7 +592,6 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     [session?.id, session?.name],
   )
 
-
   // ------------------------------------------------------------
   // Favorites: jump + highlight state（effect 在 scrollToMessage 定义之后）
   // ------------------------------------------------------------
@@ -1517,11 +1516,12 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   // ------------------------------------------------------------
   useEffect(() => {
     const check = () => {
-      const messageId = peekHighlight(session?.id ?? '')
+      if (!session?.id) return
+      const messageId = peekHighlight(session.id)
       if (!messageId) return
       // 等消息实际渲染到 DOM（assistantTurnIndexByMessageId 建立后）再消费
       if (!assistantTurnIndexByMessageId.has(messageId)) return
-      consumeHighlight(session?.id ?? '')
+      consumeHighlight(session.id)
       setHighlightMessageId(messageId)
       scrollToMessage(messageId)
     }

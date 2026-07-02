@@ -19,6 +19,7 @@ import type { NavigationState } from '../../shared/types'
  * - sessions: a session is selected
  * - settings: a subpage is selected (bare `settings` route → false)
  * - sources / skills / automations: a detail item is selected
+ * - favorites: always true — 收藏夹是全幅内容页，没有中间导航列，始终进入内容模式
  */
 export function isDetailNavState(navState: NavigationState | null): boolean {
   if (!navState) return false
@@ -32,7 +33,7 @@ export function isDetailNavState(navState: NavigationState | null): boolean {
     case 'automations':
       return navState.details !== null
     case 'favorites':
-      // 收藏夹是纯导航器视图，无详情子页
-      return false
+      // 收藏夹是全幅内容页（无中间导航列），compact 模式应滑入内容面板
+      return true
   }
 }
