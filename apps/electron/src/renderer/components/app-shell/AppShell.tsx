@@ -114,6 +114,7 @@ import { resolveEntityColor } from "@craft-agent/shared/colors"
 import * as storage from "@/lib/local-storage"
 import { toast } from "sonner"
 import { navigate, routes } from "@/lib/navigate"
+import { clampRightSidebarWidth } from "@/lib/right-sidebar-width"
 import {
   useNavigation,
   useNavigationState,
@@ -606,6 +607,23 @@ function AppShellContent({
   const isRightSidebarOpen = !!rightSidebarPanel && rightSidebarPanel.type !== 'none'
   const [rightSidebarWidth, setRightSidebarWidth] = React.useState(() =>
     storage.get(storage.KEYS.rightSidebarWidth, 240)
+  )
+  // Track window width so the right sidebar can be re-clamped when the window
+  // moves between screens (external monitor → laptop). A stale persisted width
+  // must never squeeze the chat column out on a smaller screen.
+  const [windowWidth, setWindowWidth] = React.useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1920
+  )
+  React.useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  // Displayed width = persisted intent clamped to the current window (single rule).
+  const displayedRightSidebarWidth = clampRightSidebarWidth(
+    rightSidebarWidth,
+    rightSidebarPanel?.type,
+    windowWidth,
   )
   // ┌─────────────────────────────────────────────────────────────────────┐
   // │ Info popover state — only used when Preview is the active sidebar.  │
@@ -1335,16 +1353,13 @@ function AppShellContent({
           setSessionListHandleY(e.clientY - rect.top)
         }
       } else if (isResizing === 'right-sidebar') {
-        // Right sidebar resizes from the right edge inward.
-        // The Preview panel renders markdown content so allow a wider max
-        // (up to 1000px ≈ wide reading column). Other panels are file trees
-        // / lists that don't benefit from extra width — keep them at 480.
-        // Use 60% of the window width as an absolute upper bound so the chat
-        // can never be squeezed below ~40%.
-        const maxWidth = rightSidebarPanel?.type === 'preview'
-          ? Math.min(1000, Math.floor(window.innerWidth * 0.6))
-          : 480
-        const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 180), maxWidth)
+        // Right sidebar resizes from the right edge inward; clamp via the shared
+        // rule (type cap + 60%-window cap, min 180). See @/lib/right-sidebar-width.
+        const newWidth = clampRightSidebarWidth(
+          window.innerWidth - e.clientX,
+          rightSidebarPanel?.type,
+          window.innerWidth,
+        )
         setRightSidebarWidth(newWidth)
         if (rightSidebarHandleRef.current) {
           const rect = rightSidebarHandleRef.current.getBoundingClientRect()
@@ -3440,7 +3455,7 @@ function AppShellContent({
           <div
             className="h-full shrink-0 overflow-hidden bg-background shadow-middle relative"
             style={{
-              width: rightSidebarWidth,
+              width: displayedRightSidebarWidth,
               borderRadius: RADIUS_INNER,
             }}
           >
