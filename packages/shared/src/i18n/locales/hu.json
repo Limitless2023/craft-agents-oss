@@ -448,6 +448,8 @@
   "favorites.emptyHint": "Koppints a szív ikonra egy AI-válasz alatt, hogy ide mentsd.",
   "favorites.remove": "Eltávolítás a kedvencekből",
   "favorites.title": "Kedvencek",
+  "favorites.viewCard": "Kártyanézet",
+  "favorites.viewList": "Listanézet",
   "fileViewer.clickToView": "Kattints egy fájl útvonalra a chatben az itt való megtekintéshez",
   "fileViewer.errorLoading": "Hiba a fájl betöltésekor",
   "fileViewer.loadingContent": "Tartalom betöltése...",

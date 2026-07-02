@@ -448,6 +448,8 @@
   "favorites.emptyHint": "在任意 AI 回复下点心形，即可收藏到这里。",
   "favorites.remove": "取消收藏",
   "favorites.title": "我的收藏",
+  "favorites.viewCard": "卡片视图",
+  "favorites.viewList": "列表视图",
   "fileViewer.clickToView": "点击聊天中的文件路径在此查看",
   "fileViewer.errorLoading": "加载文件出错",
   "fileViewer.loadingContent": "正在加载内容...",

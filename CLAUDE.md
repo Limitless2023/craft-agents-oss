@@ -82,6 +82,7 @@ Heart "favorite" button under every AI reply + a "Favorites" sidebar entry (abov
 1. Heart in each reply footer toggles favorite state (unique key = `messageId`), persisted in localStorage (`craft-favorites-v1`).
 2. "Favorites" sidebar entry → a new `favorites` navigator → `FavoritesPage` lists favorites (newest first, unfavorite inline).
 3. Clicking a favorite sets an ephemeral highlight-request signal then navigates to the session; `ChatDisplay` consumes it, scrolls to + flashes the message (~2s `ring-primary`). Chosen over a `?highlight=` route param because compound routes don't carry query params — avoids touching route-parser/NavigationContext core.
+4. The Favorites page supports a **list ⇄ card (grid) view toggle** (`favorites-view-mode.ts`), remembered in localStorage (`craft-favorites-view-v1`), first-time default = card.
 
 **New files** (`apps/electron/src/renderer/components/favorites/`): `favorites-core.ts`(+test), `favorites-store.ts`, `favorites-highlight-store.ts`(+test), `FavoritesPage.tsx`, `CLAUDE.md` (L2)
 

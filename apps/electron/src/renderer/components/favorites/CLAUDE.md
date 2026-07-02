@@ -9,7 +9,9 @@ favorites-core.test.ts: favorites-core 单测
 favorites-store.ts: localStorage(`craft-favorites-v1`) 绑定 + useSyncExternalStore hooks（useFavorites/useIsFavorited）；单一真相源
 favorites-highlight-store.ts: 临时跳转高亮信号（request/peek/consume/subscribe）；非持久化
 favorites-highlight-store.test.ts: 高亮信号单测
-FavoritesPage.tsx: 收藏页视图，列出/取消/点击跳回原对话（requestHighlight + navigate）
+FavoritesPage.tsx: 收藏页视图，列出/取消/点击跳回原对话（requestHighlight + navigate）；支持列表/卡片视图切换
+favorites-view-mode.ts: FavoritesViewMode 类型 + parseViewMode 纯函数 + useFavoritesViewMode hook；localStorage 持久化，首次默认卡片
+favorites-view-mode.test.ts: parseViewMode 单测（TDD）
 
 法则: 唯一键 messageId · localStorage 纯前端 · 跳转高亮走信号 store 不碰路由核心
 
