@@ -446,6 +446,7 @@
   "errors.sessionNotFound": "Sesión no encontrada",
   "favorites.empty": "No hay favoritos aún",
   "favorites.emptyHint": "Toca el corazón bajo cualquier respuesta de IA para guardarla aquí.",
+  "favorites.remove": "Eliminar de favoritos",
   "favorites.title": "Favoritos",
   "fileViewer.clickToView": "Haz clic en una ruta de archivo en el chat para verlo aquí",
   "fileViewer.errorLoading": "Error al cargar archivo",

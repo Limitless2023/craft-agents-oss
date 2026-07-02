@@ -446,6 +446,7 @@
   "errors.sessionNotFound": "Sitzung nicht gefunden",
   "favorites.empty": "Noch keine Favoriten",
   "favorites.emptyHint": "Tippe auf das Herz unter einer KI-Antwort, um sie hier zu speichern.",
+  "favorites.remove": "Aus Favoriten entfernen",
   "favorites.title": "Favoriten",
   "fileViewer.clickToView": "Klicke auf einen Dateipfad im Chat, um ihn hier anzuzeigen",
   "fileViewer.errorLoading": "Fehler beim Laden der Datei",

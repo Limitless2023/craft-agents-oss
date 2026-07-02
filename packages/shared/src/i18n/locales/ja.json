@@ -446,6 +446,7 @@
   "errors.sessionNotFound": "セッションが見つかりません",
   "favorites.empty": "まだお気に入りはありません",
   "favorites.emptyHint": "AI の返答の下にあるハートをタップすると、ここに保存されます。",
+  "favorites.remove": "お気に入りから削除",
   "favorites.title": "お気に入り",
   "fileViewer.clickToView": "チャット内のファイルパスをクリックすると、ここに表示されます",
   "fileViewer.errorLoading": "ファイルの読み込みエラー",

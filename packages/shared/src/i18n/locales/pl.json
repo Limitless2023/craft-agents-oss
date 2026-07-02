@@ -446,6 +446,7 @@
   "errors.sessionNotFound": "Sesja nie została znaleziona",
   "favorites.empty": "Brak ulubionych",
   "favorites.emptyHint": "Dotknij serca pod odpowiedzią AI, aby zapisać ją tutaj.",
+  "favorites.remove": "Usuń z ulubionych",
   "favorites.title": "Ulubione",
   "fileViewer.clickToView": "Kliknij ścieżkę pliku w czacie, aby go tutaj wyświetlić",
   "fileViewer.errorLoading": "Błąd ładowania pliku",
