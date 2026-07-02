@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 ./route-parser 的 parseCompoundRoute, buildCompoundRoute, isCompoundRoute
+ * [OUTPUT]: 无对外导出；仅测试断言
+ * [POS]: shared/route-parser 的 favorites 分支回归测试
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { test, expect } from 'bun:test'
 import { parseCompoundRoute, buildCompoundRoute, isCompoundRoute } from './route-parser'
 
