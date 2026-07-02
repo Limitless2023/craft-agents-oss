@@ -23,7 +23,8 @@ import { useAtomValue, useSetAtom } from 'jotai'
 import { useAtom } from 'jotai'
 import { FileText, X, RotateCw, FolderSearch, Maximize2, GitCompare } from 'lucide-react'
 import { createPatch } from 'diff'
-import { Markdown, UnifiedDiffViewer } from '@craft-agent/ui'
+import { Markdown, UnifiedDiffViewer, AnnotatableMarkdownDocument } from '@craft-agent/ui'
+import { usePreviewAnnotations } from '../../atoms/preview-annotations'
 import { cn } from '@/lib/utils'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { useAppShellContext } from '@/context/AppShellContext'
@@ -86,6 +87,11 @@ function PreviewPanelContent({
   const [isDragActive, setIsDragActive] = React.useState(false)
 
   const activeTab = state.activeIndex >= 0 ? state.tabs[state.activeIndex] : null
+
+  // ── 注解 hook：无条件调用（React rules of hooks）──────────────────────────
+  // previewFilePath 随 activeTab 变化；hook 内部 useMemo 保证引用稳定
+  const previewFilePath = activeTab?.filePath ?? ''
+  const [previewAnnotations, previewAnnoActions] = usePreviewAnnotations(sessionId, previewFilePath)
 
   // Load active-tab content on tab activation or refresh.
   // Caches by filePath so flipping tabs is instant; refresh bypasses cache.
@@ -470,14 +476,29 @@ function PreviewPanelContent({
             )}
             {!isLoading && !showDiff && (
               <div className="text-sm">
-                <Markdown
-                  mode="minimal"
-                  onFileClick={onOpenFile}
-                  onUrlClick={(url) => window.electronAPI.openUrl(url)}
-                  hideFirstMermaidExpand={false}
-                >
-                  {content}
-                </Markdown>
+                {previewFilePath && sessionId ? (
+                  <AnnotatableMarkdownDocument
+                    content={content}
+                    messageId={previewFilePath}
+                    sessionId={sessionId}
+                    annotations={previewAnnotations}
+                    onAddAnnotation={previewAnnoActions.add}
+                    onRemoveAnnotation={previewAnnoActions.remove}
+                    onUpdateAnnotation={previewAnnoActions.update}
+                    onOpenUrl={(url) => window.electronAPI.openUrl(url)}
+                    onOpenFile={onOpenFile}
+                    islandZIndex={420}
+                  />
+                ) : (
+                  <Markdown
+                    mode="minimal"
+                    onFileClick={onOpenFile}
+                    onUrlClick={(url) => window.electronAPI.openUrl(url)}
+                    hideFirstMermaidExpand={false}
+                  >
+                    {content}
+                  </Markdown>
+                )}
               </div>
             )}
             {!isLoading && showDiff && unifiedDiff && (

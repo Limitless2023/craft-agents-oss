@@ -22,3 +22,4 @@ export { PDFPreviewOverlay, type PDFPreviewOverlayProps } from './PDFPreviewOver
 export { MermaidPreviewOverlay, type MermaidPreviewOverlayProps } from './MermaidPreviewOverlay'
 export { HTMLPreviewOverlay, type HTMLPreviewOverlayProps } from './HTMLPreviewOverlay'
 export { ActivityCardsOverlay, type ActivityCardsOverlayProps } from './ActivityCardsOverlay'
+export { AnnotatableMarkdownDocument, type AnnotatableMarkdownDocumentProps } from './AnnotatableMarkdownDocument'

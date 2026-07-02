@@ -224,6 +224,8 @@ export {
   type PDFPreviewOverlayProps,
   ActivityCardsOverlay,
   type ActivityCardsOverlayProps,
+  AnnotatableMarkdownDocument,
+  type AnnotatableMarkdownDocumentProps,
 } from './components/overlay'
 
 // File classification (for link interceptor)
