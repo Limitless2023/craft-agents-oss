@@ -31,5 +31,8 @@ export function isDetailNavState(navState: NavigationState | null): boolean {
     case 'skills':
     case 'automations':
       return navState.details !== null
+    case 'favorites':
+      // 收藏夹是纯导航器视图，无详情子页
+      return false
   }
 }

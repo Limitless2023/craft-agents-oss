@@ -182,6 +182,9 @@ export const routes = {
       subpage
         ? `settings/${subpage}` as const
         : 'settings' as const,
+
+    /** Favorites view (favorites navigator) */
+    favorites: () => 'favorites' as const,
   },
 } as const
 
