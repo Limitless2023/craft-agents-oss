@@ -6,6 +6,7 @@ import { SkillAvatar } from '@/components/ui/skill-avatar'
 import { SourceAvatar } from '@/components/ui/source-avatar'
 import type { LoadedSkill, LoadedSource, FileSearchResult } from '../../../shared/types'
 import { AGENTS_PLUGIN_NAME } from '@craft-agent/shared/skills/types'
+import { extractMentionQuery } from './mention-query'
 
 // ============================================================================
 // Types
@@ -556,17 +557,16 @@ export function useInlineMention({
     currentInputRef.current = { value, cursorPosition }
 
     const textBeforeCursor = value.slice(0, cursorPosition)
-    // Match @ followed by up to 100 chars (word chars, hyphens, slashes, dots, and spaces).
-    // Spaces are allowed so users can type filenames with spaces (e.g. @app availability.md).
+    // Extract the trailing `@…` query (CJK-safe — see mention-query.ts).
     // The menu auto-closes when a space produces no matches (Slack-style behavior).
-    const atMatch = textBeforeCursor.match(/@([\w\-\/.\s]{0,100})?$/)
+    const mentionQuery = extractMentionQuery(textBeforeCursor)
 
     // Check if this is a valid @ mention trigger
-    const matchStart = atMatch ? textBeforeCursor.lastIndexOf('@') : -1
-    const isValidTrigger = atMatch && isValidMentionTrigger(textBeforeCursor, matchStart)
+    const matchStart = mentionQuery !== null ? textBeforeCursor.lastIndexOf('@') : -1
+    const isValidTrigger = mentionQuery !== null && isValidMentionTrigger(textBeforeCursor, matchStart)
 
     if (isValidTrigger) {
-      const filterText = atMatch[1] || ''
+      const filterText = mentionQuery ?? ''
 
       // Slack-style auto-close: if the query contains a space and the file cache is
       // populated but produces zero matches, close the menu. This prevents the
