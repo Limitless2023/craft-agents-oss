@@ -114,6 +114,7 @@ import { resolveEntityColor } from "@craft-agent/shared/colors"
 import * as storage from "@/lib/local-storage"
 import { toast } from "sonner"
 import { navigate, routes } from "@/lib/navigate"
+import { clampRightSidebarWidth, isUnderSpacePressure } from "@/lib/right-sidebar-width"
 import {
   useNavigation,
   useNavigationState,
@@ -545,6 +546,8 @@ function AppShellContent({
   const [isSidebarVisible, setIsSidebarVisible] = React.useState(() => {
     return storage.get(storage.KEYS.sidebarVisible, !defaultCollapsed)
   })
+  // 自动收起状态（空间压力触发，不持久化，不影响用户偏好）
+  const [leftSidebarAutoHidden, setLeftSidebarAutoHidden] = React.useState(false)
   const [sidebarWidth, setSidebarWidth] = React.useState(() => {
     return storage.get(storage.KEYS.sidebarWidth, 220)
   })
@@ -607,6 +610,54 @@ function AppShellContent({
   const [rightSidebarWidth, setRightSidebarWidth] = React.useState(() =>
     storage.get(storage.KEYS.rightSidebarWidth, 240)
   )
+  // Track window width so the right sidebar can be re-clamped when the window
+  // moves between screens (external monitor → laptop). A stale persisted width
+  // must never squeeze the chat column out on a smaller screen.
+  const [windowWidth, setWindowWidth] = React.useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1920
+  )
+  React.useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  // ── 三层可见度 ──────────────────────────────────────────────────────────
+  // 用户偏好层：想不想显示左栏（紧凑/focus 模式下直接为 false）
+  const sidebarShownByPref = !effectiveSidebarAndNavigatorHidden && isSidebarVisible
+  // 实际布局层：偏好 且 未被空间压力自动收起
+  const sidebarShownEffective = sidebarShownByPref && !leftSidebarAutoHidden
+
+  // Space consumed by everything LEFT of the right sidebar (columns + gaps).
+  // reservedLeftWithSidebar — 假设左栏显示（含偏好）：用于判压力。
+  // reservedLeftWidth       — 实际布局（供 clamp + 拖拽用）。
+  const navWidth = (isFavoritesNavigation(navState) || effectiveSidebarAndNavigatorHidden) ? 0 : sessionListWidth
+  const reservedLeftWithSidebar =
+    (sidebarShownByPref ? sidebarWidth : 0) + navWidth + PANEL_EDGE_INSET + PANEL_GAP +
+    (sidebarShownByPref ? PANEL_GAP : 0) + (navWidth > 0 ? PANEL_GAP : 0)
+  const reservedLeftWidth =
+    (sidebarShownEffective ? sidebarWidth : 0) + navWidth + PANEL_EDGE_INSET + PANEL_GAP +
+    (sidebarShownEffective ? PANEL_GAP : 0) + (navWidth > 0 ? PANEL_GAP : 0)
+
+  // Displayed width = persisted intent clamped so the chat keeps its minimum,
+  // accounting for the left columns and the current window (re-clamps on resize).
+  const displayedRightSidebarWidth = clampRightSidebarWidth(
+    rightSidebarWidth,
+    rightSidebarPanel?.type,
+    windowWidth,
+    reservedLeftWidth,
+  )
+
+  // ── 空间压力检测（边沿触发，避免抖动） ─────────────────────────────────
+  const pressure =
+    isRightSidebarOpen && rightSidebarPanel?.type === 'preview' && sidebarShownByPref &&
+    isUnderSpacePressure(rightSidebarWidth, windowWidth, reservedLeftWithSidebar)
+  const prevPressureRef = React.useRef(false)
+  React.useEffect(() => {
+    const prev = prevPressureRef.current
+    if (pressure && !prev) setLeftSidebarAutoHidden(true)       // 上升沿：自动收起
+    else if (!pressure && prev) setLeftSidebarAutoHidden(false) // 下降沿：自动还原
+    prevPressureRef.current = pressure
+  }, [pressure])
   // ┌─────────────────────────────────────────────────────────────────────┐
   // │ Info popover state — only used when Preview is the active sidebar.  │
   // │ Clicking the Info icon in that case opens this floating popover     │
@@ -1198,8 +1249,14 @@ function AppShellContent({
       setIsSidebarAndNavigatorHidden(false)
       return
     }
-    setIsSidebarVisible(v => !v)
-  }, [isSidebarAndNavigatorHidden])
+    // 按实际可见状态翻转：若当前可见则隐藏；若隐藏（含自动收起）则显示并清除自动收起
+    if (sidebarShownEffective) {
+      setIsSidebarVisible(false)
+    } else {
+      setIsSidebarVisible(true)
+      setLeftSidebarAutoHidden(false)
+    }
+  }, [isSidebarAndNavigatorHidden, sidebarShownEffective])
 
   // Sidebar toggle (CMD+B)
   useAction('view.toggleSidebar', handleToggleSidebar)
@@ -1327,7 +1384,7 @@ function AppShellContent({
           setSidebarHandleY(e.clientY - rect.top)
         }
       } else if (isResizing === 'session-list') {
-        const offset = isSidebarVisible ? sidebarWidth : 0
+        const offset = sidebarShownEffective ? sidebarWidth : 0
         const newWidth = Math.min(Math.max(e.clientX - offset, 240), 480)
         setSessionListWidth(newWidth)
         if (sessionListHandleRef.current) {
@@ -1335,16 +1392,14 @@ function AppShellContent({
           setSessionListHandleY(e.clientY - rect.top)
         }
       } else if (isResizing === 'right-sidebar') {
-        // Right sidebar resizes from the right edge inward.
-        // The Preview panel renders markdown content so allow a wider max
-        // (700px ≈ comfortable reading column). Other panels are file trees
-        // / lists that don't benefit from extra width — keep them at 480.
-        // Use half the window width as an absolute upper bound so the chat
-        // can never be squeezed below ~50%.
-        const maxWidth = rightSidebarPanel?.type === 'preview'
-          ? Math.min(700, Math.floor(window.innerWidth * 0.5))
-          : 480
-        const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 180), maxWidth)
+        // Right sidebar resizes from the right edge inward; clamp via the shared
+        // rule (type cap + reserve for left columns & min chat). See @/lib/right-sidebar-width.
+        const newWidth = clampRightSidebarWidth(
+          window.innerWidth - e.clientX,
+          rightSidebarPanel?.type,
+          window.innerWidth,
+          reservedLeftWidth,
+        )
         setRightSidebarWidth(newWidth)
         if (rightSidebarHandleRef.current) {
           const rect = rightSidebarHandleRef.current.getBoundingClientRect()
@@ -1379,8 +1434,9 @@ function AppShellContent({
     sidebarWidth,
     sessionListWidth,
     rightSidebarWidth,
-    isSidebarVisible,
+    sidebarShownEffective,
     rightSidebarPanel,
+    reservedLeftWidth,
   ])
 
   // Spring transition config - shared between sidebar and header
@@ -2667,15 +2723,15 @@ function AppShellContent({
             </div>
           </div>
           }
-          sidebarWidth={effectiveSidebarAndNavigatorHidden ? 0 : (isSidebarVisible ? sidebarWidth : 0)}
+          sidebarWidth={sidebarShownEffective ? sidebarWidth : 0}
           navigatorSlot={
             <div
               style={{ width: isAutoCompact ? '100%' : sessionListWidth }}
               className="h-full flex flex-col min-w-0 relative z-panel"
             >
             <PanelHeader
-              title={isSidebarVisible ? listTitle : undefined}
-              compensateForStoplight={!isSidebarVisible}
+              title={sidebarShownEffective ? listTitle : undefined}
+              compensateForStoplight={!sidebarShownEffective}
               badge={automationFilter?.automationType === 'scheduled' ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -3440,7 +3496,7 @@ function AppShellContent({
           <div
             className="h-full shrink-0 overflow-hidden bg-background shadow-middle relative"
             style={{
-              width: rightSidebarWidth,
+              width: displayedRightSidebarWidth,
               borderRadius: RADIUS_INNER,
             }}
           >
@@ -3498,7 +3554,7 @@ function AppShellContent({
             width: PANEL_SASH_HIT_WIDTH,
             top: PANEL_STACK_VERTICAL_OVERFLOW,
             bottom: PANEL_STACK_VERTICAL_OVERFLOW,
-            left: isSidebarVisible
+            left: sidebarShownEffective
               ? sidebarWidth + (PANEL_GAP / 2) - PANEL_SASH_HALF_HIT_WIDTH
               : -PANEL_GAP,
             transition: isResizing === 'sidebar' ? undefined : 'left 0.15s ease-out',
@@ -3532,7 +3588,7 @@ function AppShellContent({
             top: PANEL_STACK_VERTICAL_OVERFLOW,
             bottom: PANEL_STACK_VERTICAL_OVERFLOW,
             left:
-              (isSidebarVisible ? sidebarWidth + PANEL_GAP : PANEL_EDGE_INSET) +
+              (sidebarShownEffective ? sidebarWidth + PANEL_GAP : PANEL_EDGE_INSET) +
               sessionListWidth +
               (PANEL_GAP / 2) -
               PANEL_SASH_HALF_HIT_WIDTH,
