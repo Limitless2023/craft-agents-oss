@@ -26,6 +26,7 @@ interface FavoriteCardProps {
 function FavoriteCard({ fav, onOpen, t }: FavoriteCardProps) {
   return (
     <button
+      type="button"
       onClick={() => onOpen(fav.sessionId, fav.messageId)}
       className="group w-full text-left rounded-lg border border-border/40 hover:border-border hover:bg-muted/40 transition-colors p-3 flex items-start gap-3"
     >
@@ -73,6 +74,7 @@ export default function FavoritesPage() {
         {/* 视图切换控件 */}
         <div className="flex items-center gap-1">
           <button
+            type="button"
             aria-label={t('favorites.viewList')}
             title={t('favorites.viewList')}
             onClick={() => setMode('list')}
@@ -85,6 +87,7 @@ export default function FavoritesPage() {
             <List className="h-4 w-4" />
           </button>
           <button
+            type="button"
             aria-label={t('favorites.viewCard')}
             title={t('favorites.viewCard')}
             onClick={() => setMode('card')}
