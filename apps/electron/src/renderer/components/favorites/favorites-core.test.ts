@@ -1,3 +1,10 @@
+/**
+ * [INPUT]: 依赖 ./favorites-core 的所有导出
+ * [OUTPUT]: 无（测试文件，不对外暴露）
+ * [POS]: favorites 纯核心的 TDD 验证；bun test 直接运行，无 DOM
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+
 import { test, expect } from 'bun:test'
 import {
   parseFavorites,
