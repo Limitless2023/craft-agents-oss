@@ -75,6 +75,7 @@ import { CHAT_LAYOUT } from "@/config/layout"
 import { collectFileChangesFromActivities, getFirstFileChangeIdForActivity } from "@/lib/file-changes"
 import { resolveBranchNewPanelOption } from "./branching"
 import { handleErrorMessageAction } from "./error-message-actions"
+import { useFavorites, toggleFavorite, type Favorite } from '../favorites/favorites-store'
 
 // ============================================================================
 // CSS Custom Highlight API helper
@@ -567,6 +568,28 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     expandedActivityGroups,
     setExpandedActivityGroups,
   } = useTurnCardExpansion(session?.id)
+
+  // ============================================================
+  // 收藏：订阅快照 + 构建 per-turn 判活/切换函数
+  // ============================================================
+  const favorites = useFavorites()
+  const favIsActive = useCallback(
+    (messageId: string) => favorites.some(f => f.messageId === messageId),
+    [favorites],
+  )
+  const makeToggleFavorite = useCallback(
+    (messageId: string, text: string) => () => {
+      const fav: Favorite = {
+        messageId,
+        sessionId: session?.id ?? '',
+        sessionTitle: session?.name ?? '',
+        contentSnapshot: text,
+        createdAt: Date.now(),
+      }
+      toggleFavorite(fav)
+    },
+    [session?.id, session?.name],
+  )
 
 
   // ============================================================================
@@ -1728,6 +1751,12 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                         compactMode={compactMode}
                         sendMessageKey={sendMessageKey}
                         openAnnotationRequest={openAnnotationRequest}
+                        isFavorited={!!turn.response?.messageId && favIsActive(turn.response.messageId)}
+                        onToggleFavorite={
+                          turn.response?.messageId
+                            ? makeToggleFavorite(turn.response.messageId, turn.response.text ?? '')
+                            : undefined
+                        }
                         onBranch={session?.supportsBranching ? async (messageId: string, options?: { newPanel?: boolean }) => {
                           if (!session) return
                           try {
