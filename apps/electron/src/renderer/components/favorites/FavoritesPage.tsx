@@ -21,18 +21,20 @@ interface FavoriteCardProps {
   fav: Favorite
   onOpen: (sessionId: string, messageId: string) => void
   t: (key: string) => string
+  // 'card' 模式加高：更多摘要行 + 更大内边距；'list' 保持紧凑
+  variant: 'list' | 'card'
 }
 
-function FavoriteCard({ fav, onOpen, t }: FavoriteCardProps) {
+function FavoriteCard({ fav, onOpen, t, variant }: FavoriteCardProps) {
   return (
     <button
       type="button"
       onClick={() => onOpen(fav.sessionId, fav.messageId)}
-      className="group w-full text-left rounded-lg border border-border/40 hover:border-border hover:bg-muted/40 transition-colors p-3 flex items-start gap-3"
+      className={`group w-full text-left rounded-lg border border-border/40 hover:border-border hover:bg-muted/40 transition-colors flex items-start gap-3 ${variant === 'card' ? 'p-4' : 'p-3'}`}
     >
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate">{fav.sessionTitle || fav.sessionId}</div>
-        <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{fav.contentSnapshot}</div>
+        <div className={`text-xs text-muted-foreground mt-0.5 ${variant === 'card' ? 'line-clamp-4' : 'line-clamp-2'}`}>{fav.contentSnapshot}</div>
         <div className="text-[11px] text-muted-foreground/70 mt-1">
           {new Date(fav.createdAt).toLocaleString()}
         </div>
@@ -112,7 +114,7 @@ export default function FavoritesPage() {
         <ul className="px-4 py-3 space-y-2">
           {sorted.map(fav => (
             <li key={fav.messageId}>
-              <FavoriteCard fav={fav} onOpen={openFavorite} t={t} />
+              <FavoriteCard fav={fav} onOpen={openFavorite} t={t} variant="list" />
             </li>
           ))}
         </ul>
@@ -120,7 +122,7 @@ export default function FavoritesPage() {
         /* 卡片模式 — 响应式网格 */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 py-3">
           {sorted.map(fav => (
-            <FavoriteCard key={fav.messageId} fav={fav} onOpen={openFavorite} t={t} />
+            <FavoriteCard key={fav.messageId} fav={fav} onOpen={openFavorite} t={t} variant="card" />
           ))}
         </div>
       )}
