@@ -867,6 +867,14 @@ export interface AutomationsNavigationState {
 }
 
 /**
+ * Favorites navigation state (navigator-only view, no subpage/details)
+ */
+export interface FavoritesNavigationState {
+  navigator: 'favorites'
+  rightSidebar?: RightSidebarPanel
+}
+
+/**
  * Unified navigation state
  */
 export type NavigationState =
@@ -875,6 +883,7 @@ export type NavigationState =
   | SettingsNavigationState
   | SkillsNavigationState
   | AutomationsNavigationState
+  | FavoritesNavigationState
 
 export const isSessionsNavigation = (
   state: NavigationState
@@ -895,6 +904,10 @@ export const isSkillsNavigation = (
 export const isAutomationsNavigation = (
   state: NavigationState
 ): state is AutomationsNavigationState => state.navigator === 'automations'
+
+export const isFavoritesNavigation = (
+  state: NavigationState
+): state is FavoritesNavigationState => state.navigator === 'favorites'
 
 export const DEFAULT_NAVIGATION_STATE: NavigationState = {
   navigator: 'sessions',
@@ -924,6 +937,9 @@ export const getNavigationStateKey = (state: NavigationState): string => {
   if (state.navigator === 'settings') {
     if (state.subpage === null) return 'settings'
     return `settings:${state.subpage}`
+  }
+  if (state.navigator === 'favorites') {
+    return 'favorites'
   }
   // Chats
   const f = state.filter
@@ -977,6 +993,9 @@ export const parseNavigationStateKey = (key: string): NavigationState | null => 
       return { navigator: 'settings', subpage }
     }
   }
+
+  // Handle favorites
+  if (key === 'favorites') return { navigator: 'favorites' }
 
   // Handle sessions
   const parseSessionsKey = (filterKey: string, sessionId?: string): NavigationState | null => {

@@ -75,6 +75,8 @@ import { CHAT_LAYOUT } from "@/config/layout"
 import { collectFileChangesFromActivities, getFirstFileChangeIdForActivity } from "@/lib/file-changes"
 import { resolveBranchNewPanelOption } from "./branching"
 import { handleErrorMessageAction } from "./error-message-actions"
+import { useFavorites, toggleFavorite, type Favorite } from '../favorites/favorites-store'
+import { peekHighlight, consumeHighlight, subscribeHighlight } from '../favorites/favorites-highlight-store'
 
 // ============================================================================
 // CSS Custom Highlight API helper
@@ -568,6 +570,32 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     setExpandedActivityGroups,
   } = useTurnCardExpansion(session?.id)
 
+  // ============================================================
+  // 收藏：订阅快照 + 构建 per-turn 判活/切换函数
+  // ============================================================
+  const favorites = useFavorites()
+  const favIsActive = useCallback(
+    (messageId: string) => favorites.some(f => f.messageId === messageId),
+    [favorites],
+  )
+  const makeToggleFavorite = useCallback(
+    (messageId: string, text: string) => () => {
+      const fav: Favorite = {
+        messageId,
+        sessionId: session?.id ?? '',
+        sessionTitle: session?.name ?? '',
+        contentSnapshot: text,
+        createdAt: Date.now(),
+      }
+      toggleFavorite(fav)
+    },
+    [session?.id, session?.name],
+  )
+
+  // ------------------------------------------------------------
+  // Favorites: jump + highlight state（effect 在 scrollToMessage 定义之后）
+  // ------------------------------------------------------------
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
 
   // ============================================================================
   // Search Highlighting (from session list search)
@@ -1407,11 +1435,8 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     return map
   }, [allTurns])
 
-  const scrollToFollowUpTurn = useCallback((item: {
-    messageId: string
-    annotationId: string
-  }) => {
-    const targetTurnIndex = assistantTurnIndexByMessageId.get(item.messageId)
+  const scrollToMessage = useCallback((messageId: string) => {
+    const targetTurnIndex = assistantTurnIndexByMessageId.get(messageId)
     if (targetTurnIndex == null) return
 
     const ensureVisibleCount = allTurns.length - targetTurnIndex
@@ -1449,6 +1474,11 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     }
   }, [assistantTurnIndexByMessageId, allTurns, visibleTurnCount])
 
+  const scrollToFollowUpTurn = useCallback(
+    (item: { messageId: string; annotationId: string }) => scrollToMessage(item.messageId),
+    [scrollToMessage],
+  )
+
   const handleFollowUpChipClick = useCallback((item: {
     messageId: string
     annotationId: string
@@ -1478,6 +1508,32 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   }) => {
     scrollToFollowUpTurn(item)
   }, [scrollToFollowUpTurn])
+
+  // ------------------------------------------------------------
+  // Favorites: consume pending "jump + highlight" request
+  // 必须在 assistantTurnIndexByMessageId 与 scrollToMessage 之后，
+  // 避免 TDZ（Temporal Dead Zone）错误
+  // ------------------------------------------------------------
+  useEffect(() => {
+    const check = () => {
+      if (!session?.id) return
+      const messageId = peekHighlight(session.id)
+      if (!messageId) return
+      // 等消息实际渲染到 DOM（assistantTurnIndexByMessageId 建立后）再消费
+      if (!assistantTurnIndexByMessageId.has(messageId)) return
+      consumeHighlight(session.id)
+      setHighlightMessageId(messageId)
+      scrollToMessage(messageId)
+    }
+    check()
+    return subscribeHighlight(check)
+  }, [session?.id, assistantTurnIndexByMessageId, scrollToMessage])
+
+  useEffect(() => {
+    if (!highlightMessageId) return
+    const timer = setTimeout(() => setHighlightMessageId(null), 2000)
+    return () => clearTimeout(timer)
+  }, [highlightMessageId])
 
   // Compute if we should skip scroll-to-bottom (when search is active on session switch)
   // At render time, prevSessionIdForScrollRef still has the OLD session ID, so we can detect the switch
@@ -1696,6 +1752,8 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
 
                     // Assistant turns - render with TurnCard (buffered streaming)
                     const assistantUiKey = getAssistantTurnUiKey(turn, index)
+                    const isHighlightTarget =
+                      highlightMessageId != null && turn.response?.messageId === highlightMessageId
                     return (
                       <div
                         key={turnKey}
@@ -1704,7 +1762,8 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                           "pt-2",
                           "rounded-lg transition-all duration-200",
                           isCurrentMatch && "ring-2 ring-info ring-offset-2 ring-offset-background",
-                          isAnyMatch && !isCurrentMatch && "ring-1 ring-info/30"
+                          isAnyMatch && !isCurrentMatch && "ring-1 ring-info/30",
+                          isHighlightTarget && "ring-2 ring-primary ring-offset-2 ring-offset-background"
                         )}
                       >
                       <TurnCard
@@ -1728,6 +1787,12 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                         compactMode={compactMode}
                         sendMessageKey={sendMessageKey}
                         openAnnotationRequest={openAnnotationRequest}
+                        isFavorited={!!turn.response?.messageId && favIsActive(turn.response.messageId)}
+                        onToggleFavorite={
+                          turn.response?.messageId
+                            ? makeToggleFavorite(turn.response.messageId, turn.response.text ?? '')
+                            : undefined
+                        }
                         onBranch={session?.supportsBranching ? async (messageId: string, options?: { newPanel?: boolean }) => {
                           if (!session) return
                           try {

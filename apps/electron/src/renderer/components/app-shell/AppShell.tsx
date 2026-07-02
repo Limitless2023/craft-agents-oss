@@ -34,6 +34,7 @@ import {
   BookOpen,
   FileText as PreviewIcon,
   MailOpen,
+  Heart,
 } from "lucide-react"
 // SessionStatusIcons no longer used - icons come from dynamic sessionStatuses
 import { SourceAvatar } from "@/components/ui/source-avatar"
@@ -123,6 +124,7 @@ import {
   isAutomationsNavigation,
   type NavigationState,
 } from "@/contexts/NavigationContext"
+import { isFavoritesNavigation } from "../../../shared/types"
 import type { SettingsSubpage } from "../../../shared/types"
 import { SourcesListPanel } from "./SourcesListPanel"
 import { SkillsListPanel } from "./SkillsListPanel"
@@ -1873,6 +1875,11 @@ function AppShellContent({
     navigate(routes.view.settings(subpage))
   }, [])
 
+  // Handler for favorites view.
+  const handleFavoritesClick = useCallback(() => {
+    navigate(routes.view.favorites())
+  }, [])
+
   // Handler for What's New overlay
   const handleWhatsNewClick = useCallback(async () => {
     const content = await window.electronAPI.getReleaseNotes()
@@ -2621,6 +2628,14 @@ function AppShellContent({
                     },
                     // --- Separator ---
                     { id: "separator:skills-settings", type: "separator" },
+                    // --- Favorites ---
+                    {
+                      id: "nav:favorites",
+                      title: t("sidebar.favorites"),
+                      icon: Heart,
+                      variant: isFavoritesNavigation(navState) ? "default" : "ghost",
+                      onClick: () => handleFavoritesClick(),
+                    },
                     // --- Settings ---
                     {
                       id: "nav:settings",
@@ -3413,7 +3428,7 @@ function AppShellContent({
             )}
             </div>
           }
-          navigatorWidth={isAutoCompact ? sessionListWidth : (effectiveSidebarAndNavigatorHidden ? 0 : sessionListWidth)}
+          navigatorWidth={isFavoritesNavigation(navState) ? 0 : (isAutoCompact ? sessionListWidth : (effectiveSidebarAndNavigatorHidden ? 0 : sessionListWidth))}
           isSidebarAndNavigatorHidden={effectiveSidebarAndNavigatorHidden}
           isRightSidebarVisible={isRightSidebarOpen}
           isCompact={isAutoCompact}

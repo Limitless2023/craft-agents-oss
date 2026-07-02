@@ -32,6 +32,7 @@ import {
   isSkillsNavigation,
   isAutomationsNavigation,
 } from '@/contexts/NavigationContext'
+import { isFavoritesNavigation } from '../../../shared/types'
 import { useSessionSelection, useIsMultiSelectActive, useSelectedIds, useSelectionCount } from '@/hooks/useSession'
 import { sourceSelection, skillSelection, automationSelection } from '@/hooks/useEntitySelection'
 import { extractLabelId } from '@craft-agent/shared/labels'
@@ -39,6 +40,7 @@ import type { SessionStatusId } from '@/config/session-status-config'
 import { SourceInfoPage, ChatPage } from '@/pages'
 import SkillInfoPage from '@/pages/SkillInfoPage'
 import { getSettingsPageComponent } from '@/pages/settings/settings-pages'
+import FavoritesPage from '../favorites/FavoritesPage'
 import { AutomationInfoPage } from '../automations/AutomationInfoPage'
 import type { ExecutionEntry } from '../automations/types'
 import { automationsAtom } from '@/atoms/automations'
@@ -229,6 +231,15 @@ export function MainContentPanel({
       />
     </StoplightProvider>
   )
+
+  // Favorites navigator - navigator-only full-page view.
+  if (isFavoritesNavigation(navState)) {
+    return wrapWithStoplight(
+      <Panel variant="grow" className={className}>
+        <FavoritesPage />
+      </Panel>
+    )
+  }
 
   // Settings navigator - uses component map from settings-pages.ts.
   // Bare `settings` route (subpage === null) means navigator-only view in compact mode;

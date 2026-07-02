@@ -74,6 +74,27 @@ Clicking local file path links in AI messages (e.g. `[report](/Users/foo/report.
 
 **Design spec:** `docs/superpowers/specs/2026-07-02-cmd-r-rename-session-design.md`
 
+### Message Favorites — Heart button + Favorites sidebar page
+
+Heart "favorite" button under every AI reply + a "Favorites" sidebar entry (above Settings) that lists favorites and jumps back to the original message with a brief highlight. Pure-renderer, localStorage-backed.
+
+**How it works:**
+1. Heart in each reply footer toggles favorite state (unique key = `messageId`), persisted in localStorage (`craft-favorites-v1`).
+2. "Favorites" sidebar entry → a new `favorites` navigator → `FavoritesPage` lists favorites (newest first, unfavorite inline).
+3. Clicking a favorite sets an ephemeral highlight-request signal then navigates to the session; `ChatDisplay` consumes it, scrolls to + flashes the message (~2s `ring-primary`). Chosen over a `?highlight=` route param because compound routes don't carry query params — avoids touching route-parser/NavigationContext core.
+
+**New files** (`apps/electron/src/renderer/components/favorites/`): `favorites-core.ts`(+test), `favorites-store.ts`, `favorites-highlight-store.ts`(+test), `FavoritesPage.tsx`, `CLAUDE.md` (L2)
+
+**Modified files:**
+- `packages/ui/src/components/chat/TurnCard.tsx` — heart button in the reply footer (+ `isFavorited`/`onToggleFavorite` props)
+- `apps/electron/src/renderer/components/app-shell/ChatDisplay.tsx` — heart wiring + scroll-to/flash highlight consumer
+- `apps/electron/src/renderer/components/app-shell/AppShell.tsx` — Favorites sidebar entry above Settings
+- `apps/electron/src/renderer/components/app-shell/MainContentPanel.tsx` — renders FavoritesPage for the favorites navigator
+- `apps/electron/src/shared/{types.ts,routes.ts,route-parser.ts}` + `renderer/lib/nav-helpers.ts` — the `favorites` navigator
+- `packages/shared/src/i18n/locales/*.json` — `sidebar.favorites`, `favorites.*`, `common.favorite` (all 7 locales)
+
+**Patching:** renderer-only → `bun run --filter '@craft-agent/electron' build:renderer` + `bash patch-app.sh` (no main/preload/subprocess rebuild).
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.
