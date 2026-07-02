@@ -78,6 +78,9 @@ import { handleErrorMessageAction } from "./error-message-actions"
 import { useFavorites, toggleFavorite, type Favorite } from '../favorites/favorites-store'
 import { peekHighlight, consumeHighlight, subscribeHighlight } from '../favorites/favorites-highlight-store'
 
+// 路径末段提取（模块级稳定引用，无需每次渲染重新分配）
+const basename = (p: string) => p.split('/').pop() || p
+
 // ============================================================================
 // CSS Custom Highlight API helper
 // ============================================================================
@@ -542,7 +545,6 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   // Preview panel follow-up hooks（渲染层 store，无后端消息可挂）
   const previewPendingRaw = usePreviewPendingFollowUps(session?.id ?? '')
   const markPreviewFollowUpsSent = useMarkPreviewFollowUpsSent(session?.id ?? '')
-  const basename = (p: string) => p.split('/').pop() || p
 
   // Navigation for session branching
   const { navigate } = useNavigation()
@@ -1087,11 +1089,10 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   const lastMessageRole = lastMessage?.role
 
   const pendingFollowUpAnnotations = useMemo<PendingFollowUpAnnotation[]>(() => {
-    if (!session?.messages?.length) return []
-
     const pending: PendingFollowUpAnnotation[] = []
+    const messages = session?.messages ?? []
 
-    for (const message of session.messages) {
+    for (const message of messages) {
       if (message.role !== 'assistant' && message.role !== 'plan') continue
       if (!message.annotations?.length) continue
 
