@@ -448,6 +448,8 @@
   "favorites.emptyHint": "Dotknij serca pod odpowiedzią AI, aby zapisać ją tutaj.",
   "favorites.remove": "Usuń z ulubionych",
   "favorites.title": "Ulubione",
+  "favorites.viewCard": "Widok kart",
+  "favorites.viewList": "Widok listy",
   "fileViewer.clickToView": "Kliknij ścieżkę pliku w czacie, aby go tutaj wyświetlić",
   "fileViewer.errorLoading": "Błąd ładowania pliku",
   "fileViewer.loadingContent": "Ładowanie zawartości...",

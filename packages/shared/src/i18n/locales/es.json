@@ -448,6 +448,8 @@
   "favorites.emptyHint": "Toca el corazón bajo cualquier respuesta de IA para guardarla aquí.",
   "favorites.remove": "Eliminar de favoritos",
   "favorites.title": "Favoritos",
+  "favorites.viewCard": "Vista de tarjetas",
+  "favorites.viewList": "Vista de lista",
   "fileViewer.clickToView": "Haz clic en una ruta de archivo en el chat para verlo aquí",
   "fileViewer.errorLoading": "Error al cargar archivo",
   "fileViewer.loadingContent": "Cargando contenido...",
