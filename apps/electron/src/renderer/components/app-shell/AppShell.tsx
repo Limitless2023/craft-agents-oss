@@ -1337,12 +1337,12 @@ function AppShellContent({
       } else if (isResizing === 'right-sidebar') {
         // Right sidebar resizes from the right edge inward.
         // The Preview panel renders markdown content so allow a wider max
-        // (700px ≈ comfortable reading column). Other panels are file trees
+        // (up to 1000px ≈ wide reading column). Other panels are file trees
         // / lists that don't benefit from extra width — keep them at 480.
-        // Use half the window width as an absolute upper bound so the chat
-        // can never be squeezed below ~50%.
+        // Use 60% of the window width as an absolute upper bound so the chat
+        // can never be squeezed below ~40%.
         const maxWidth = rightSidebarPanel?.type === 'preview'
-          ? Math.min(700, Math.floor(window.innerWidth * 0.5))
+          ? Math.min(1000, Math.floor(window.innerWidth * 0.6))
           : 480
         const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 180), maxWidth)
         setRightSidebarWidth(newWidth)
