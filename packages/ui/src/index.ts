@@ -92,6 +92,7 @@ export {
 export {
   Spinner,
   AgentSpinner,
+  LoadingIndicator,
   SimpleDropdown,
   SimpleDropdownItem,
   PreviewHeader,
@@ -117,6 +118,7 @@ export {
   type SpinnerProps,
   type AgentSpinnerProps,
   type GlimmerMode,
+  type LoadingIndicatorProps,
   type SimpleDropdownProps,
   type SimpleDropdownItemProps,
   type PreviewHeaderProps,

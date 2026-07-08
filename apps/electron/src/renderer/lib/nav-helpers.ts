@@ -31,6 +31,7 @@ export function isDetailNavState(navState: NavigationState | null): boolean {
     case 'sources':
     case 'skills':
     case 'automations':
+    case 'projects':
       return navState.details !== null
     case 'favorites':
       // 收藏夹是全幅内容页（无中间导航列），compact 模式应滑入内容面板
