@@ -100,6 +100,20 @@ Heart "favorite" button under every AI reply + a "Favorites" sidebar entry (abov
 
 Select text in the right-side Preview panel (`.md` files) → attach a note (persistent highlight) → it joins the chat composer's pending follow-ups and is sent with the next message, quote prefixed with the file name. Renderer-only: annotations persist in a jotai store (`craft-preview-annotations:<sessionId>`, keyed by the file path used as a pseudo-messageId); reuses `AnnotatableMarkdownDocument` + `formatFollowUpSection`. Known limit: highlights anchor by char offset, so live agent edits to the file can drift them.
 
+### Preview Reading Mode — Hide/Show Highlights
+
+An Eye/EyeOff toggle in the right-side Preview panel header hides/shows **all** highlight annotations for the whole panel (global, non-destructive, not persisted — resets to shown on restart). Reuses the panel's existing plain-`<Markdown>` render branch when on; decoupled from the follow-up send pipeline (hiding a noted highlight does not stop it sending — hide ≠ cancel). The toggle only appears when the active document has ≥1 highlight or the mode is already on.
+
+**New files:**
+- `apps/electron/src/renderer/atoms/preview-reading-mode.ts` — global `atom(false)` + `usePreviewReadingMode` hook
+
+**Modified files:**
+- `apps/electron/src/renderer/components/right-sidebar/PreviewPanel.tsx` — header Eye/EyeOff button + `!readingMode` render gate
+
+**Design/plan:** `docs/superpowers/specs/2026-07-08-preview-reading-mode-design.md`, `docs/superpowers/plans/2026-07-08-preview-reading-mode.md`
+
+**Patching:** renderer-only → `bun run --filter '@craft-agent/electron' build:renderer` + `bash patch-app.sh`.
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.
