@@ -12,6 +12,8 @@ preview-annotations-core.test.ts: reducers 单测（6 cases）
 
 preview-annotations.ts: 标注 jotai atomFamily + 3 hooks（usePreviewAnnotations/usePreviewPendingFollowUps/useMarkPreviewFollowUpsSent），localStorage `craft-preview-annotations:<sessionId>` 持久化
 
+preview-reading-mode.ts: Preview 面板「阅读模式」全局开关（隐藏/显示高亮批注），普通 atom(false) + usePreviewReadingMode hook，非持久，与 preview-annotations 存储解耦
+
 browser-pane.ts: 浏览器 overlay 状态
 
 info-popover.ts: Info panel 展开/收起状态

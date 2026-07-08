@@ -21,10 +21,11 @@
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { useAtom } from 'jotai'
-import { FileText, X, RotateCw, FolderSearch, Maximize2, GitCompare } from 'lucide-react'
+import { FileText, X, RotateCw, FolderSearch, Maximize2, GitCompare, Eye, EyeOff } from 'lucide-react'
 import { createPatch } from 'diff'
 import { Markdown, UnifiedDiffViewer, AnnotatableMarkdownDocument } from '@craft-agent/ui'
 import { usePreviewAnnotations } from '../../atoms/preview-annotations'
+import { usePreviewReadingMode } from '../../atoms/preview-reading-mode'
 import { cn } from '@/lib/utils'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { useAppShellContext } from '@/context/AppShellContext'
@@ -92,6 +93,8 @@ function PreviewPanelContent({
   // previewFilePath 随 activeTab 变化；hook 内部 useMemo 保证引用稳定
   const previewFilePath = activeTab?.filePath ?? ''
   const [previewAnnotations, previewAnnoActions] = usePreviewAnnotations(sessionId, previewFilePath)
+  // 阅读模式：全局视图开关，隐藏所有高亮批注（纯视觉，不影响追问发送）
+  const [readingMode, toggleReadingMode] = usePreviewReadingMode()
 
   // Load active-tab content on tab activation or refresh.
   // Caches by filePath so flipping tabs is instant; refresh bypasses cache.
@@ -376,6 +379,22 @@ function PreviewPanelContent({
                   <GitCompare className="w-3.5 h-3.5" />
                 </button>
               )}
+              {/* Reading mode — hide/show all highlight annotations for the
+                 whole Preview panel. Non-destructive, global, not persisted.
+                 Only rendered when there's something to hide (active tab has
+                 highlights) or the mode is already on (so it can be turned
+                 back off after switching to a highlight-free doc). */}
+              {(previewAnnotations.length > 0 || readingMode) && (
+                <button
+                  onClick={toggleReadingMode}
+                  className={`p-1 rounded-[6px] transition-colors ${
+                    readingMode ? 'text-foreground bg-foreground/10' : 'text-muted-foreground/50 hover:text-foreground'
+                  }`}
+                  title={readingMode ? 'Show highlights' : 'Hide highlights'}
+                >
+                  {readingMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              )}
               <button
                 onClick={() => setRefreshNonce((n) => n + 1)}
                 className="p-1 rounded-[6px] transition-colors text-muted-foreground/50 hover:text-foreground"
@@ -476,7 +495,7 @@ function PreviewPanelContent({
             )}
             {!isLoading && !showDiff && (
               <div className="text-sm">
-                {previewFilePath && sessionId ? (
+                {previewFilePath && sessionId && !readingMode ? (
                   <AnnotatableMarkdownDocument
                     content={content}
                     messageId={previewFilePath}
