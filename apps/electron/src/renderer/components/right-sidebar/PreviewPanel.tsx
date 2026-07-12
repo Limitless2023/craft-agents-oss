@@ -478,13 +478,15 @@ function PreviewPanelContent({
           </div>
         )}
         {activeTab && (
-          // px-6 py-4 — comfortable reading margin at sidebar widths up to 700px.
+          // 居中阅读列：max-w 928 − px-6×2 = 正文 880px，与全屏 overlay 的
+          // 阅读列严格同宽（960 卡片 − px-10×2）。面板窄时 max-w 不生效，
+          // 宽时多余空间自然变成左右留白——无需按宽度分支。
           // Styling matches DocumentFormattedMarkdownOverlay: `text-sm` wrapper
           // + Markdown `mode="minimal"`, NO Tailwind prose layer (the overlay
           // doesn't use prose either, and adding it changes heading sizes
           // / list spacing in ways that don't match what the user sees in
           // the full-screen view). Keep the two surfaces visually identical.
-          <div className="px-6 py-4">
+          <div className="px-6 py-4 max-w-[928px] mx-auto">
             {isLoading && (
               <div className="text-xs text-muted-foreground/60 italic">Loading…</div>
             )}

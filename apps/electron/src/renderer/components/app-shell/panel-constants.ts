@@ -24,10 +24,10 @@ export const PANEL_STACK_VERTICAL_OVERFLOW = 8
  * Keep all seams (sidebar, navigator/content, panel/panel) aligned by deriving
  * offsets from these constants instead of hardcoded pixel literals.
  */
-// 14 px gives ~7 px of grab zone on each side of the visible seam. The
-// previous 8 px (4 px each side) was easy to miss — modern IDEs use 12-16 px
-// for resize handles. Visible line stays 2 px so the look is unchanged.
-export const PANEL_SASH_HIT_WIDTH = 14
+// 20 px gives 10 px of grab zone on each side of the visible seam（历史：8 太难命中
+// → 14 仍偏窄 → 20）。命中区不参与布局（全部 absolute/负偏移实现），只影响鼠标
+// 判定；再宽会开始压住聊天区右缘的 overlay 滚动条。Visible line stays 2 px.
+export const PANEL_SASH_HIT_WIDTH = 20
 export const PANEL_SASH_LINE_WIDTH = 2
 
 /**

@@ -116,7 +116,7 @@ import { resolveEntityColor } from "@craft-agent/shared/colors"
 import * as storage from "@/lib/local-storage"
 import { toast } from "sonner"
 import { navigate, routes } from "@/lib/navigate"
-import { clampRightSidebarWidth, isUnderSpacePressure } from "@/lib/right-sidebar-width"
+import { clampRightSidebarWidth, autoCollapseLevel } from "@/lib/right-sidebar-width"
 import {
   useNavigation,
   useNavigationState,
@@ -552,8 +552,6 @@ function AppShellContent({
   const [isSidebarVisible, setIsSidebarVisible] = React.useState(() => {
     return storage.get(storage.KEYS.sidebarVisible, !defaultCollapsed)
   })
-  // 自动收起状态（空间压力触发，不持久化，不影响用户偏好）
-  const [leftSidebarAutoHidden, setLeftSidebarAutoHidden] = React.useState(false)
   const [sidebarWidth, setSidebarWidth] = React.useState(() => {
     return storage.get(storage.KEYS.sidebarWidth, 220)
   })
@@ -628,21 +626,30 @@ function AppShellContent({
     return () => window.removeEventListener('resize', onResize)
   }, [])
   // ── 三层可见度 ──────────────────────────────────────────────────────────
-  // 用户偏好层：想不想显示左栏（紧凑/focus 模式下直接为 false）
+  // 用户偏好层：想不想显示（紧凑/focus 模式下直接为 false）
   const sidebarShownByPref = !effectiveSidebarAndNavigatorHidden && isSidebarVisible
-  // 实际布局层：偏好 且 未被空间压力自动收起
-  const sidebarShownEffective = sidebarShownByPref && !leftSidebarAutoHidden
+  const navShownByPref = !isFavoritesNavigation(navState) && !effectiveSidebarAndNavigatorHidden
 
-  // Space consumed by everything LEFT of the right sidebar (columns + gaps).
-  // reservedLeftWithSidebar — 假设左栏显示（含偏好）：用于判压力。
-  // reservedLeftWidth       — 实际布局（供 clamp + 拖拽用）。
-  const navWidth = (isFavoritesNavigation(navState) || effectiveSidebarAndNavigatorHidden) ? 0 : sessionListWidth
-  const reservedLeftWithSidebar =
-    (sidebarShownByPref ? sidebarWidth : 0) + navWidth + PANEL_EDGE_INSET + PANEL_GAP +
-    (sidebarShownByPref ? PANEL_GAP : 0) + (navWidth > 0 ? PANEL_GAP : 0)
-  const reservedLeftWidth =
-    (sidebarShownEffective ? sidebarWidth : 0) + navWidth + PANEL_EDGE_INSET + PANEL_GAP +
-    (sidebarShownEffective ? PANEL_GAP : 0) + (navWidth > 0 ? PANEL_GAP : 0)
+  // 左侧占用阶梯（按"偏好布局"算，阈值不受实际收起状态反馈 → 无震荡）：
+  // base = 边缘 inset + 与主内容的 gap；每列显示则追加 自身宽度 + gap。
+  const RESERVED_BASE = PANEL_EDGE_INSET + PANEL_GAP
+  const reservedFull = RESERVED_BASE +
+    (sidebarShownByPref ? sidebarWidth + PANEL_GAP : 0) +
+    (navShownByPref ? sessionListWidth + PANEL_GAP : 0)
+  const reservedNavOnly = RESERVED_BASE +
+    (navShownByPref ? sessionListWidth + PANEL_GAP : 0)
+
+  // ── 空间压力阶梯：Preview 拖宽时左侧列逐级让位（收左栏 → 收会话列表） ──
+  const collapseLevel = isRightSidebarOpen && rightSidebarPanel?.type === 'preview'
+    ? autoCollapseLevel(rightSidebarWidth, windowWidth, reservedFull, reservedNavOnly)
+    : 0
+
+  // 实际布局层：偏好 且 未被空间压力收起
+  const sidebarShownEffective = sidebarShownByPref && collapseLevel < 1
+  const navShownEffective = navShownByPref && collapseLevel < 2
+  const reservedLeftWidth = RESERVED_BASE +
+    (sidebarShownEffective ? sidebarWidth + PANEL_GAP : 0) +
+    (navShownEffective ? sessionListWidth + PANEL_GAP : 0)
 
   // Displayed width = persisted intent clamped so the chat keeps its minimum,
   // accounting for the left columns and the current window (re-clamps on resize).
@@ -653,17 +660,11 @@ function AppShellContent({
     reservedLeftWidth,
   )
 
-  // ── 空间压力检测（边沿触发，避免抖动） ─────────────────────────────────
-  const pressure =
-    isRightSidebarOpen && rightSidebarPanel?.type === 'preview' && sidebarShownByPref &&
-    isUnderSpacePressure(rightSidebarWidth, windowWidth, reservedLeftWithSidebar)
-  const prevPressureRef = React.useRef(false)
-  React.useEffect(() => {
-    const prev = prevPressureRef.current
-    if (pressure && !prev) setLeftSidebarAutoHidden(true)       // 上升沿：自动收起
-    else if (!pressure && prev) setLeftSidebarAutoHidden(false) // 下降沿：自动还原
-    prevPressureRef.current = pressure
-  }, [pressure])
+  // 拖拽 clamp 的左侧占用：Preview 的左侧列会自动让位，地板 = base；
+  // 其余面板列不让位，用实际占用。用实际占用会把意图掐死在阈值上（触发要
+  // 严格大于），阶梯永远跨不过去——这就是"拖不动收起"的死锁根源。
+  const rightSidebarDragReserve =
+    rightSidebarPanel?.type === 'preview' ? RESERVED_BASE : reservedLeftWidth
   // ┌─────────────────────────────────────────────────────────────────────┐
   // │ Info popover state — only used when Preview is the active sidebar.  │
   // │ Clicking the Info icon in that case opens this floating popover     │
@@ -1355,14 +1356,37 @@ function AppShellContent({
       setIsSidebarAndNavigatorHidden(false)
       return
     }
-    // 按实际可见状态翻转：若当前可见则隐藏；若隐藏（含自动收起）则显示并清除自动收起
+    // 按实际可见状态翻转：若当前可见则隐藏；若隐藏（含自动收起）则显示。
+    // 显式召回左栏 = 左栏赢：把 Preview 意图宽度压回"左栏+会话列表都显示"
+    // 还放得下的值——收起阶梯是纯派生的，宽度一收，列自然全数回来。
     if (sidebarShownEffective) {
       setIsSidebarVisible(false)
     } else {
       setIsSidebarVisible(true)
-      setLeftSidebarAutoHidden(false)
+      const reservedWithSidebarShown = PANEL_EDGE_INSET + PANEL_GAP +
+        sidebarWidth + PANEL_GAP +
+        (navShownByPref ? sessionListWidth + PANEL_GAP : 0)
+      const fitted = clampRightSidebarWidth(
+        rightSidebarWidth,
+        rightSidebarPanel?.type,
+        windowWidth,
+        reservedWithSidebarShown,
+      )
+      if (fitted < rightSidebarWidth) {
+        setRightSidebarWidth(fitted)
+        storage.set(storage.KEYS.rightSidebarWidth, fitted)
+      }
     }
-  }, [isSidebarAndNavigatorHidden, sidebarShownEffective])
+  }, [
+    isSidebarAndNavigatorHidden,
+    sidebarShownEffective,
+    navShownByPref,
+    sidebarWidth,
+    sessionListWidth,
+    rightSidebarWidth,
+    rightSidebarPanel,
+    windowWidth,
+  ])
 
   // Sidebar toggle (CMD+B)
   useAction('view.toggleSidebar', handleToggleSidebar)
@@ -1499,12 +1523,13 @@ function AppShellContent({
         }
       } else if (isResizing === 'right-sidebar') {
         // Right sidebar resizes from the right edge inward; clamp via the shared
-        // rule (type cap + reserve for left columns & min chat). See @/lib/right-sidebar-width.
+        // rule (type cap + reserve + min chat). Preview 用地板占用，意图才能
+        // 穿越自动收起阈值。See @/lib/right-sidebar-width.
         const newWidth = clampRightSidebarWidth(
           window.innerWidth - e.clientX,
           rightSidebarPanel?.type,
           window.innerWidth,
-          reservedLeftWidth,
+          rightSidebarDragReserve,
         )
         setRightSidebarWidth(newWidth)
         if (rightSidebarHandleRef.current) {
@@ -1542,7 +1567,7 @@ function AppShellContent({
     rightSidebarWidth,
     sidebarShownEffective,
     rightSidebarPanel,
-    reservedLeftWidth,
+    rightSidebarDragReserve,
   ])
 
   // Spring transition config - shared between sidebar and header
@@ -3823,7 +3848,7 @@ function AppShellContent({
             )}
             </div>
           }
-          navigatorWidth={isFavoritesNavigation(navState) ? 0 : (isAutoCompact ? sessionListWidth : (effectiveSidebarAndNavigatorHidden || isBoardView ? 0 : sessionListWidth))}
+          navigatorWidth={isFavoritesNavigation(navState) ? 0 : (isAutoCompact ? sessionListWidth : (!navShownEffective || isBoardView ? 0 : sessionListWidth))}
           isSidebarAndNavigatorHidden={effectiveSidebarAndNavigatorHidden}
           isRightSidebarVisible={isRightSidebarOpen}
           isCompact={isAutoCompact}
@@ -3833,12 +3858,29 @@ function AppShellContent({
         {/* Right Sidebar - Docs / Files / History */}
         {isRightSidebarOpen && rightSidebarPanel && (
           <div
-            className="h-full shrink-0 overflow-hidden bg-background shadow-middle relative"
-            style={{
-              width: displayedRightSidebarWidth,
-              borderRadius: RADIUS_INNER,
-            }}
+            className="h-full shrink-0 relative"
+            style={{ width: displayedRightSidebarWidth }}
           >
+            {/* 视觉层：圆角裁剪独立成层——手柄必须留在 overflow-hidden 之外，
+                负 margin 伸进面板缝隙的那一半命中区才不会被裁掉（裁掉正是
+                "拖动条难触发"的根源：用户瞄准的可视缝隙恰好是死区）。 */}
+            <div
+              className="absolute inset-0 overflow-hidden bg-background shadow-middle"
+              style={{ borderRadius: RADIUS_INNER }}
+            >
+              <RightSidebar
+                panel={rightSidebarPanel}
+                closeButton={
+                  <button
+                    onClick={() => updateRightSidebar({ type: 'none' })}
+                    className="p-1 rounded-[6px] text-muted-foreground/50 hover:text-foreground transition-colors"
+                    title="Close sidebar"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                }
+              />
+            </div>
             {/* Right Sidebar Resize Handle */}
             <div
               ref={rightSidebarHandleRef}
@@ -3861,18 +3903,6 @@ function AppShellContent({
                 }}
               />
             </div>
-            <RightSidebar
-              panel={rightSidebarPanel}
-              closeButton={
-                <button
-                  onClick={() => updateRightSidebar({ type: 'none' })}
-                  className="p-1 rounded-[6px] text-muted-foreground/50 hover:text-foreground transition-colors"
-                  title="Close sidebar"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              }
-            />
           </div>
         )}
 
@@ -3909,8 +3939,8 @@ function AppShellContent({
         </div>
         )}
 
-        {/* Session List Resize Handle (absolute, hidden in focused mode and board view) */}
-        {!effectiveSidebarAndNavigatorHidden && !isBoardView && (
+        {/* Session List Resize Handle (absolute, hidden in focused mode, board view and auto-collapse) */}
+        {navShownEffective && !isBoardView && (
         <div
           ref={sessionListHandleRef}
           onMouseDown={(e) => { e.preventDefault(); setIsResizing('session-list') }}

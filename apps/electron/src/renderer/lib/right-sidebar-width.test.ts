@@ -1,38 +1,49 @@
 /**
- * [INPUT]: 依赖 ./right-sidebar-width 的 clampRightSidebarWidth + isUnderSpacePressure + 常量
+ * [INPUT]: 依赖 ./right-sidebar-width 的 clampRightSidebarWidth + autoCollapseLevel + 常量；
+ *          依赖 ../components/app-shell/panel-constants 的 PANEL_MIN_WIDTH（同步守护）
  * [OUTPUT]: 无对外导出；仅测试断言
- * [POS]: 右侧栏宽度 clamp 纯逻辑的回归测试；bun test 直接运行，无 DOM
+ * [POS]: 右侧栏宽度 clamp / 收起阶梯纯逻辑的回归测试；bun test 直接运行，无 DOM
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 import { test, expect } from 'bun:test'
 import {
   clampRightSidebarWidth,
-  isUnderSpacePressure,
+  autoCollapseLevel,
   RIGHT_SIDEBAR_MIN_WIDTH,
-  PREVIEW_MAX_WIDTH,
   OTHER_PANEL_MAX_WIDTH,
+  MIN_MAIN_CONTENT_WIDTH,
 } from './right-sidebar-width'
+import { PANEL_MIN_WIDTH } from '../components/app-shell/panel-constants'
 
 // reservedLeft ≈ sidebar(220) + sessionList(300) + gaps(~18) = 538 (both left columns open)
 const LEFT = 538
 
-test('wide screen with both columns open still allows the full preview cap', () => {
-  // room = 1920 - 538 - 320(min chat) = 1062 > 1000 → type cap wins
-  expect(clampRightSidebarWidth(1000, 'preview', 1920, LEFT)).toBe(PREVIEW_MAX_WIDTH)
+// ============================================================
+// 常量同步守护：聊天保底必须等于布局层的面板最小宽度，
+// 否则 reserve 按小数算、PanelSlot 按大数拒缩 → flex 行溢出。
+// ============================================================
+test('MIN_MAIN_CONTENT_WIDTH stays in lockstep with PANEL_MIN_WIDTH', () => {
+  expect(MIN_MAIN_CONTENT_WIDTH).toBe(PANEL_MIN_WIDTH)
 })
 
-test('small screen: preview shrinks so the chat keeps its 320px minimum (the bug)', () => {
-  // room = 1200 - 538 - 320 = 342 → capped at 342, not 60%*1200=720
-  expect(clampRightSidebarWidth(1000, 'preview', 1200, LEFT)).toBe(342)
+test('wide screen: preview has no absolute cap — chat minimum is the only bound', () => {
+  // room = 1920 - 538 - 440(min chat) = 942 → 900 直通；1500 被压到 942
+  expect(clampRightSidebarWidth(900, 'preview', 1920, LEFT)).toBe(900)
+  expect(clampRightSidebarWidth(1500, 'preview', 1920, LEFT)).toBe(942)
+})
+
+test('small screen: preview shrinks so the chat keeps its minimum (the bug)', () => {
+  // room = 1200 - 538 - 440 = 222 → capped at 222
+  expect(clampRightSidebarWidth(1000, 'preview', 1200, LEFT)).toBe(222)
 })
 
 test('hiding the left columns gives the preview more room (dynamic reserve)', () => {
-  // same 1200px window but columns hidden → room = 1200 - 0 - 320 = 880
-  expect(clampRightSidebarWidth(1000, 'preview', 1200, 0)).toBe(880)
+  // same 1200px window but columns hidden → room = 1200 - 0 - 440 = 760
+  expect(clampRightSidebarWidth(1000, 'preview', 1200, 0)).toBe(760)
 })
 
 test('tiny window floors the panel at the minimum width', () => {
-  // room = 900 - 538 - 320 = 42 < MIN → floored at MIN
+  // room = 900 - 538 - 440 = -78 < MIN → floored at MIN
   expect(clampRightSidebarWidth(1000, 'preview', 900, LEFT)).toBe(RIGHT_SIDEBAR_MIN_WIDTH)
 })
 
@@ -46,25 +57,28 @@ test('non-preview panels are capped at OTHER_PANEL_MAX_WIDTH', () => {
 })
 
 test('reservedLeft defaults to 0 when omitted', () => {
-  // 1200 - 0 - 320 = 880
-  expect(clampRightSidebarWidth(1000, 'preview', 1200)).toBe(880)
+  // 1200 - 0 - 440 = 760
+  expect(clampRightSidebarWidth(1000, 'preview', 1200)).toBe(760)
 })
 
 // ============================================================
-// isUnderSpacePressure — 左栏显示时 preview 能否达到意图宽度？
-// room = innerWidth - reservedLeftWithSidebar - 320(min chat)
+// autoCollapseLevel — 拖宽 Preview 时左侧列逐级让位
+// 1920 窗口：reservedFull=544 (base12+左栏226+会话列表306), reservedNavOnly=318
+// room(full) = 1920-544-440 = 936; room(navOnly) = 1920-318-440 = 1162
 // ============================================================
-test('isUnderSpacePressure: fits with sidebar → no pressure', () => {
-  // room = 1920 - 538 - 320 = 1062; intentWidth=600 ≤ 1062 → false
-  expect(isUnderSpacePressure(600, 1920, 538)).toBe(false)
+test('autoCollapseLevel: fits with everything shown → 0 (boundary is strict >)', () => {
+  expect(autoCollapseLevel(936, 1920, 544, 318)).toBe(0)
 })
 
-test('isUnderSpacePressure: does not fit → pressure', () => {
-  // room = 1200 - 538 - 320 = 342; intentWidth=343 > 342 → true
-  expect(isUnderSpacePressure(343, 1200, 538)).toBe(true)
+test('autoCollapseLevel: crossing the sidebar threshold → 1', () => {
+  expect(autoCollapseLevel(937, 1920, 544, 318)).toBe(1)
+  expect(autoCollapseLevel(1162, 1920, 544, 318)).toBe(1) // nav 阈值边界仍是 1
 })
 
-test('isUnderSpacePressure: boundary (exact fit) → no pressure (strict >)', () => {
-  // room = 1200 - 538 - 320 = 342; intentWidth=342 → 342 > 342 = false
-  expect(isUnderSpacePressure(342, 1200, 538)).toBe(false)
+test('autoCollapseLevel: crossing the nav threshold → 2', () => {
+  expect(autoCollapseLevel(1163, 1920, 544, 318)).toBe(2)
+})
+
+test('autoCollapseLevel: sidebar already hidden by pref (full === navOnly) → jumps straight to 2', () => {
+  expect(autoCollapseLevel(1163, 1920, 318, 318)).toBe(2)
 })
