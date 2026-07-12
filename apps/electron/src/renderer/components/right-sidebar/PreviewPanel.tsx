@@ -19,18 +19,25 @@
  *
  * 正文是居中阅读列（880px，与全屏 overlay 同宽）；右缘挂 OutlineRail 悬浮
  * 大纲（收起层级条 / 悬停展开 / 点击跳转 / scrollspy），diff 与加载中不显示。
+ *
+ * 编辑模式：Pencil → 同列 CodeMirror md 源码编辑器（MarkdownSourceEditor），
+ * ⌘S/Save 显式落盘（file:write IPC），
+ * Esc/Cancel 放弃；保存前与磁盘比对基线快照防覆盖 agent 并发修改；
+ * 草稿跨 tab 保留，脏草稿关 tab 有 confirm 守护。
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { useAtom } from 'jotai'
-import { FileText, X, RotateCw, FolderSearch, Maximize2, GitCompare, Eye, EyeOff } from 'lucide-react'
+import { FileText, X, RotateCw, FolderSearch, Maximize2, GitCompare, Eye, EyeOff, Pencil } from 'lucide-react'
+import { toast } from 'sonner'
 import { createPatch } from 'diff'
 import { Markdown, UnifiedDiffViewer, AnnotatableMarkdownDocument } from '@craft-agent/ui'
 import { usePreviewAnnotations } from '../../atoms/preview-annotations'
 import { usePreviewReadingMode } from '../../atoms/preview-reading-mode'
 import { OutlineRail } from './OutlineRail'
+import { MarkdownSourceEditor } from './MarkdownSourceEditor'
 import { cn } from '@/lib/utils'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { useAppShellContext } from '@/context/AppShellContext'
@@ -101,6 +108,15 @@ function PreviewPanelContent({
   // 阅读模式：全局视图开关，隐藏所有高亮批注（纯视觉，不影响追问发送）
   const [readingMode, toggleReadingMode] = usePreviewReadingMode()
 
+  // ── 编辑模式 ─────────────────────────────────────────────────────────────
+  // editDrafts 有 key = 该文件处于编辑中；草稿跨 tab 切换保留，仅显式 Save 落盘。
+  // baselines 存进入编辑时的内容快照——保存前与磁盘比对，防静默覆盖 agent 的并发修改。
+  const [editDrafts, setEditDrafts] = React.useState<Record<string, string>>({})
+  const [saving, setSaving] = React.useState(false)
+  const editBaselinesRef = React.useRef<Record<string, string>>({})
+  const isDraftDirty = React.useCallback((p: string) =>
+    editDrafts[p] !== undefined && editDrafts[p] !== editBaselinesRef.current[p], [editDrafts])
+
   // Load active-tab content on tab activation or refresh.
   // Caches by filePath so flipping tabs is instant; refresh bypasses cache.
   React.useEffect(() => {
@@ -146,6 +162,17 @@ function PreviewPanelContent({
       }
       return next
     })
+    // And drop edit drafts / baselines for closed tabs
+    setEditDrafts((prev) => {
+      const next: typeof prev = {}
+      for (const [k, v] of Object.entries(prev)) {
+        if (open.has(k)) next[k] = v
+      }
+      return next
+    })
+    for (const key of Object.keys(editBaselinesRef.current)) {
+      if (!open.has(key)) delete editBaselinesRef.current[key]
+    }
   }, [state.tabs])
 
   // ┌─────────────────────────────────────────────────────────────────────┐
@@ -189,33 +216,7 @@ function PreviewPanelContent({
     }
   }, [activeTab?.filePath])
 
-  // ┌─────────────────────────────────────────────────────────────────────┐
-  // │ Keyboard shortcuts while the panel is mounted:                      │
-  // │   ⌘R / Ctrl+R → refresh active tab                                  │
-  // │   ⌘W / Ctrl+W → close active tab (skipped if there's no tab)        │
-  // │ Both preventDefault to avoid the Electron menu accelerators in dev  │
-  // │ mode (reload / close window).                                       │
-  // └─────────────────────────────────────────────────────────────────────┘
-  React.useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return
-      const key = e.key.toLowerCase()
-      if (key === 'r') {
-        e.preventDefault()
-        e.stopPropagation()
-        setRefreshNonce((n) => n + 1)
-      } else if (key === 'w') {
-        // Close current tab only when one exists — otherwise let the keystroke
-        // fall through so the user can close the window/panel as expected.
-        if (state.activeIndex < 0) return
-        e.preventDefault()
-        e.stopPropagation()
-        setState((prev) => closeSidebarDocTab(prev, prev.activeIndex))
-      }
-    }
-    window.addEventListener('keydown', handler, true)
-    return () => window.removeEventListener('keydown', handler, true)
-  }, [state.activeIndex, setState])
+  // （键盘快捷键 effect 在编辑 handlers 之后注册——⌘S 需要引用 saveEdit）
 
   // ┌─────────────────────────────────────────────────────────────────────┐
   // │ Restore scroll position when (a) the active tab changes, or (b)    │
@@ -242,12 +243,20 @@ function PreviewPanelContent({
     [setState],
   )
 
+  // 关 tab 前守护未保存草稿（X 按钮 / 中键 / ⌘W 共用）
+  const confirmCloseTab = React.useCallback((idx: number) => {
+    const p = state.tabs[idx]?.filePath
+    if (p && isDraftDirty(p)) return window.confirm('Discard unsaved changes?')
+    return true
+  }, [state.tabs, isDraftDirty])
+
   const handleClose = React.useCallback(
     (idx: number) => (e: React.MouseEvent) => {
       e.stopPropagation()
+      if (!confirmCloseTab(idx)) return
       setState((prev) => closeSidebarDocTab(prev, idx))
     },
-    [setState],
+    [setState, confirmCloseTab],
   )
 
   // Middle-click on a tab closes it — browser tab convention.
@@ -257,9 +266,10 @@ function PreviewPanelContent({
       if (e.button !== 1) return
       e.preventDefault()
       e.stopPropagation()
+      if (!confirmCloseTab(idx)) return
       setState((prev) => closeSidebarDocTab(prev, idx))
     },
-    [setState],
+    [setState, confirmCloseTab],
   )
 
   // ┌─────────────────────────────────────────────────────────────────────┐
@@ -351,6 +361,104 @@ function PreviewPanelContent({
     return createPatch(name, previous, content, 'previous', 'current')
   }, [activeTab, hasDiffAvailable, previous, content])
 
+  // ── 编辑模式派生 + 动作 ──────────────────────────────────────────────────
+  const editPath = activeTab?.filePath
+  const draft = editPath !== undefined ? editDrafts[editPath] : undefined
+  const isEditing = draft !== undefined
+  const isDirty = editPath !== undefined && isDraftDirty(editPath)
+
+  const startEdit = React.useCallback(() => {
+    if (!activeTab || isLoading) return
+    const p = activeTab.filePath
+    editBaselinesRef.current[p] = content
+    setEditDrafts((prev) => ({ ...prev, [p]: content }))
+  }, [activeTab, isLoading, content])
+
+  const cancelEdit = React.useCallback(() => {
+    if (editPath === undefined) return
+    if (isDraftDirty(editPath) && !window.confirm('Discard unsaved changes?')) return
+    delete editBaselinesRef.current[editPath]
+    setEditDrafts((prev) => {
+      const { [editPath]: _dropped, ...rest } = prev
+      return rest
+    })
+  }, [editPath, isDraftDirty])
+
+  const saveEdit = React.useCallback(async () => {
+    if (editPath === undefined) return
+    const nextContent = editDrafts[editPath]
+    if (nextContent === undefined) return
+    setSaving(true)
+    try {
+      // 冲突检测：磁盘内容 ≠ 编辑基线（agent 在你编辑期间改过）→ 确认再覆盖
+      const disk = await window.electronAPI.readFile(editPath).catch(() => null)
+      const baseline = editBaselinesRef.current[editPath]
+      if (
+        disk !== null && disk !== baseline && disk !== nextContent &&
+        !window.confirm('File changed on disk while you were editing (possibly by the agent). Overwrite with your version?')
+      ) {
+        return
+      }
+      await window.electronAPI.writeFile(editPath, nextContent)
+      // 缓存像一次外部编辑：previous = 保存前盘上内容 → diff 可回看本次改动
+      setContents((prev) => ({
+        ...prev,
+        [editPath]: {
+          content: nextContent,
+          previous: disk !== null && disk !== nextContent ? disk : prev[editPath]?.previous,
+        },
+      }))
+      delete editBaselinesRef.current[editPath]
+      setEditDrafts((prev) => {
+        const { [editPath]: _dropped, ...rest } = prev
+        return rest
+      })
+    } catch (err) {
+      // 保存失败留在编辑模式——草稿不丢
+      toast.error('Failed to save file', {
+        description: err instanceof Error ? err.message : 'Unknown error',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }, [editPath, editDrafts])
+
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Keyboard shortcuts while the panel is mounted:                      │
+  // │   ⌘R / Ctrl+R → refresh active tab                                  │
+  // │   ⌘S / Ctrl+S → save draft (editing only; textarea 失焦也生效)       │
+  // │   ⌘W / Ctrl+W → close active tab (skipped if there's no tab;        │
+  // │                 dirty draft asks before discarding)                 │
+  // │ All preventDefault to avoid the Electron menu accelerators in dev  │
+  // │ mode (reload / close window).                                       │
+  // └─────────────────────────────────────────────────────────────────────┘
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return
+      const key = e.key.toLowerCase()
+      if (key === 'r') {
+        e.preventDefault()
+        e.stopPropagation()
+        setRefreshNonce((n) => n + 1)
+      } else if (key === 's') {
+        if (editPath === undefined || editDrafts[editPath] === undefined) return
+        e.preventDefault()
+        e.stopPropagation()
+        void saveEdit()
+      } else if (key === 'w') {
+        // Close current tab only when one exists — otherwise let the keystroke
+        // fall through so the user can close the window/panel as expected.
+        if (state.activeIndex < 0) return
+        e.preventDefault()
+        e.stopPropagation()
+        if (!confirmCloseTab(state.activeIndex)) return
+        setState((prev) => closeSidebarDocTab(prev, prev.activeIndex))
+      }
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [state.activeIndex, setState, editPath, editDrafts, saveEdit, confirmCloseTab])
+
   return (
     <div
       className={cn(
@@ -369,8 +477,40 @@ function PreviewPanelContent({
           <span className="text-xs font-medium">Preview</span>
         </div>
         <div className="flex items-center gap-1">
-          {activeTab && (
+          {/* ── 编辑模式头部：Save / Cancel 取代全部视图按钮 ── */}
+          {activeTab && isEditing && (
             <>
+              <button
+                onClick={() => void saveEdit()}
+                disabled={!isDirty || saving}
+                className="px-2.5 py-1 rounded-[6px] text-[11px] font-medium bg-foreground text-background hover:opacity-90 disabled:opacity-40 disabled:cursor-default transition-opacity"
+                title="Save (⌘S)"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                onClick={cancelEdit}
+                disabled={saving}
+                className="px-2 py-1 rounded-[6px] text-[11px] text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] transition-colors"
+                title="Cancel (Esc)"
+              >
+                Cancel
+              </button>
+            </>
+          )}
+          {activeTab && !isEditing && (
+            <>
+              {/* 进入编辑模式（diff 视图下不可用——先切回渲染视图） */}
+              {!showDiff && (
+                <button
+                  onClick={startEdit}
+                  disabled={!!isLoading}
+                  className="p-1 rounded-[6px] transition-colors text-muted-foreground/50 hover:text-foreground disabled:opacity-40"
+                  title="Edit (explicit save)"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
               {/* Diff toggle — only meaningful when we have a prior version
                  captured (i.e., the file changed since you opened the tab). */}
               {hasDiffAvailable && (
@@ -484,7 +624,21 @@ function PreviewPanelContent({
             </div>
           </div>
         )}
-        {activeTab && (
+        {activeTab && isEditing && (
+          // 编辑模式：同一条 880px 阅读列里的 CodeMirror md 源码编辑器
+          //（语法高亮 / ⌘S 保存 / Esc 取消 / ⌘B ⌘I / 列表自动续行）。
+          // key 按 filePath 重建实例；initialValue 用草稿——切 tab 回来不丢。
+          <div className="h-full px-6 py-4 max-w-[928px] mx-auto">
+            <MarkdownSourceEditor
+              key={activeTab.filePath}
+              initialValue={draft ?? ''}
+              onChange={(v) => setEditDrafts((prev) => ({ ...prev, [activeTab.filePath]: v }))}
+              onSave={() => void saveEdit()}
+              onCancel={cancelEdit}
+            />
+          </div>
+        )}
+        {activeTab && !isEditing && (
           // 居中阅读列：max-w 928 − px-6×2 = 正文 880px，与全屏 overlay 的
           // 阅读列严格同宽（960 卡片 − px-10×2）。面板窄时 max-w 不生效，
           // 宽时多余空间自然变成左右留白——无需按宽度分支。
@@ -545,8 +699,8 @@ function PreviewPanelContent({
           </div>
         )}
       </div>
-      {/* 大纲导航：diff / 加载中 / 空状态不显示；数据从渲染后 DOM 扫描 */}
-      {activeTab && !showDiff && !isLoading && (
+      {/* 大纲导航：diff / 加载中 / 空状态 / 编辑中不显示；数据从渲染后 DOM 扫描 */}
+      {activeTab && !showDiff && !isLoading && !isEditing && (
         <OutlineRail
           scrollRef={scrollContainerRef}
           content={content}

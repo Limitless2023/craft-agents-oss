@@ -325,6 +325,8 @@ export interface ElectronAPI {
 
   // File operations
   readFile(path: string): Promise<string>
+  /** Write a UTF-8 text file (full overwrite). Preview 面板编辑保存用；与 readFile 同一套 workspace 路径校验 */
+  writeFile(path: string, content: string): Promise<void>
   /** Read a file as binary data (Uint8Array) */
   readFileBinary(path: string): Promise<Uint8Array>
   /** Read a file as a data URL (data:{mime};base64,...) for binary preview (images, PDFs) */

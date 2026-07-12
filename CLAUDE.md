@@ -119,6 +119,12 @@ An Eye/EyeOff toggle in the right-side Preview panel header hides/shows **all** 
 
 Preview 面板的大纲导航，**双形态**：悬浮态 = 右缘一列层级小横条（H1 最长，scrollspy 加深当前章节），悬停展开为文字大纲浮层；固定态 = 大纲头部 Pin 钉住后变 220px **常驻大纲列**（流内 flex 兄弟，滚动区自动让位，正文照常居中），对照阅读用，偏好持久化（`atoms/preview-outline-pinned.ts`，localStorage `craft-preview-outline-pinned-v1`）。点击平滑跳转、当前项自动滚入视野。**数据从渲染后 DOM 扫 h1-h4**（地图从地形生成，不解析 markdown——setext/代码块歧义不存在，标注/阅读两条渲染分支天然兼容）；跳转与 scrollspy **实时重查 DOM 不持久化元素引用**（永不过期）。标题 ≥2 才显示；diff/加载中/空状态隐藏。新文件 `right-sidebar/OutlineRail.tsx`（hook + 共享列表 + 双形态渲染，自包含），`PreviewPanel.tsx` 滚动区包一层 relative+flex 挂载。renderer-only → `build:renderer` + `bash patch-app.sh`。
 
+### Preview Edit Mode — .md 面板内编辑（显式保存）
+
+Preview 头部 Pencil 进入编辑模式：同一条 880px 阅读列里变成 **CodeMirror 6 md 源码编辑器**（`MarkdownSourceEditor.tsx`：语法高亮、⌘B/⌘I 加粗斜体、列表自动续行、软换行；主题走 CSS 变量自动亮暗；依赖 `@codemirror/*` 6 包 + `@lezer/highlight`），**Save（⌘S）显式落盘 / Cancel（Esc）放弃**，草稿跨 tab 切换保留（内存 Map，不落盘）。刻意选源码编辑而非 WYSIWYG：往返保真——不碰用户未改动的字节，diff/标注/agent 上下文零污染。**保存冲突检测**：写盘前重读磁盘，若 ≠ 进入编辑时的基线快照（agent 并发改过）→ confirm 确认覆盖，绝不静默；保存后缓存视作一次外部编辑（previous=保存前盘上内容 → diff 可回看本次改动）。脏草稿在关 tab（X/中键/⌘W）和 Cancel 时都有 confirm 守护。编辑中隐藏大纲/标注/diff/阅读模式按钮。
+
+**⚠️ 非 renderer-only**：新增 `file:write` IPC——`packages/shared/protocol/channels.ts`（`file.WRITE`）+ `routing.ts`（REMOTE_ELIGIBLE）+ `packages/server-core/handlers/rpc/files.ts`（handler，与 READ 同一套 `validateFilePath` workspace 校验）+ `transport/channel-map.ts` + `shared/types.ts`。patch 时须 `build:main` + `build:preload`（+renderer）再 `patch-app.sh`。通道快照测试 `shared/__tests__/ipc-channels.test.ts` 加通道必须同步更新（2026-07-12 顺带补了 3 个历史漏项：fs:gitStatus/fs:listFiles/system:openFile）。
+
 ### Preview Width Rule — 聊天保底 + 左侧列收起阶梯
 
 Preview 面板宽度**没有绝对上限**（2026-07-12 删除了 `PREVIEW_MAX_WIDTH = 1000` 魔数）——唯一约束是聊天区保底 `MIN_MAIN_CONTENT_WIDTH = 440`，**必须等于** `panel-constants` 的 `PANEL_MIN_WIDTH`（PanelSlot 的 flex minWidth；两数不等则 reserve 按小数算、布局按大数拒缩 → flex 行溢出，测试有 lockstep 守护）。Info/docs 类面板仍有 `OTHER_PANEL_MAX_WIDTH = 480` 类型上限，下限统一 `180`。Preview 手柄命中区：圆角裁剪独立成视觉层，拖拽手柄留在 `overflow-hidden` 外——否则负 margin 伸进面板缝隙的那半命中区被裁掉，可视缝隙成死区（"拖动条难触发"的根源）。
