@@ -165,11 +165,18 @@ cd ~/Desktop/Projects/craft-agents-oss
 git pull origin main
 bun install
 
-# 2. Build the renderer (+ main/preload when backend changed)
+# 2. Build renderer + main + preload —— 自 2026-07-12 起升级后必须全跑：
+#    我们的定制已进入 main 进程（file:write handler @ server-core/files.ts、
+#    Finder open-file @ main/index.ts）+ preload（channel-map 的 writeFile 绑定）。
+#    只 build renderer 会让 patch-app.sh 把「合并前的旧 main.cjs」盖进安装位——
+#    丢上游 main 新改动，或（首次 clone 后）丢我们的 file:write → 编辑保存直接报错。
 export https_proxy=http://127.0.0.1:7890   # proxy if needed
 export http_proxy=http://127.0.0.1:7890
 export all_proxy=socks5://127.0.0.1:7890
 bun run --filter '@craft-agent/electron' build:renderer
+bun run --filter '@craft-agent/electron' build:main
+bun run --filter '@craft-agent/electron' build:preload
+bun run --filter '@craft-agent/electron' build:preload-toolbar
 
 # 2b. If the Pi SDK was upgraded (new models in the catalog), REBUILD the
 #     subprocess bundle too — main.cjs and pi-agent-server carry separate SDK
