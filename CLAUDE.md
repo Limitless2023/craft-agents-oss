@@ -44,7 +44,8 @@ Clicking local file path links in AI messages (e.g. `[report](/Users/foo/report.
 **How it works:**
 1. `link-target.ts` — paths starting with `/` or `~/` are identified as file links (with `decodeURIComponent` for `%20`/unicode)
 2. `useLinkInterceptor.ts` — `handleOpenUrl` intercepts local paths (`/`, `~/`, `file://`) and routes to `handleOpenFile`
-3. File routing: PDF → system default app, images → in-app preview, markdown/code → in-app preview, folders → Finder
+3. File routing: PDF → system default app, images → in-app preview, **markdown → Preview 看板（侧边栏 tab，2026-07-12 起默认）**, code/json/text → in-app overlay, folders → Finder
+4. Markdown 全屏回落两条路径：Preview 看板 ⤢ 按钮（`handleOpenFile(path, { fullscreen: true })` → `MarkdownPreview.fullscreen` 标记）、无聚焦会话（冷启动 Finder 打开等，看板挂不上）。自动 dock 在 `App.tsx` `FilePreviewRenderer`（markdown 状态到达即 dock + 不渲染 overlay），复用既有 `handleDockToSidebar`
 
 **Modified files:**
 - `packages/ui/src/components/markdown/link-target.ts` — absolute path detection + URI decoding
@@ -114,11 +115,15 @@ An Eye/EyeOff toggle in the right-side Preview panel header hides/shows **all** 
 
 **Patching:** renderer-only → `bun run --filter '@craft-agent/electron' build:renderer` + `bash patch-app.sh`.
 
+### Preview Outline — 右缘悬浮大纲（TOC）
+
+Preview 面板的大纲导航，**双形态**：悬浮态 = 右缘一列层级小横条（H1 最长，scrollspy 加深当前章节），悬停展开为文字大纲浮层；固定态 = 大纲头部 Pin 钉住后变 220px **常驻大纲列**（流内 flex 兄弟，滚动区自动让位，正文照常居中），对照阅读用，偏好持久化（`atoms/preview-outline-pinned.ts`，localStorage `craft-preview-outline-pinned-v1`）。点击平滑跳转、当前项自动滚入视野。**数据从渲染后 DOM 扫 h1-h4**（地图从地形生成，不解析 markdown——setext/代码块歧义不存在，标注/阅读两条渲染分支天然兼容）；跳转与 scrollspy **实时重查 DOM 不持久化元素引用**（永不过期）。标题 ≥2 才显示；diff/加载中/空状态隐藏。新文件 `right-sidebar/OutlineRail.tsx`（hook + 共享列表 + 双形态渲染，自包含），`PreviewPanel.tsx` 滚动区包一层 relative+flex 挂载。renderer-only → `build:renderer` + `bash patch-app.sh`。
+
 ### Preview Width Rule — 聊天保底 + 左侧列收起阶梯
 
 Preview 面板宽度**没有绝对上限**（2026-07-12 删除了 `PREVIEW_MAX_WIDTH = 1000` 魔数）——唯一约束是聊天区保底 `MIN_MAIN_CONTENT_WIDTH = 440`，**必须等于** `panel-constants` 的 `PANEL_MIN_WIDTH`（PanelSlot 的 flex minWidth；两数不等则 reserve 按小数算、布局按大数拒缩 → flex 行溢出，测试有 lockstep 守护）。Info/docs 类面板仍有 `OTHER_PANEL_MAX_WIDTH = 480` 类型上限，下限统一 `180`。Preview 手柄命中区：圆角裁剪独立成视觉层，拖拽手柄留在 `overflow-hidden` 外——否则负 margin 伸进面板缝隙的那半命中区被裁掉，可视缝隙成死区（"拖动条难触发"的根源）。
 
-拖宽 Preview 时左侧列按**阶梯逐级让位**（`autoCollapseLevel`：0=全显示 → 1=收左栏 → 2=连会话列表也收），拖回去逐级还原。阶梯是**纯派生**（无 state/effect/latch）：阈值按"偏好布局"计算，不受实际收起状态反馈，无震荡。关键设计（2026-07-12 修复的死锁）：**拖拽 clamp 对 Preview 用地板占用（仅 inset+gap=12），不用实际占用**——否则意图宽度被掐死在阈值整数上而触发条件是严格大于，阶梯永远跨不过去。显示宽度仍按实际布局 clamp，聊天永远 ≥320。Cmd+B 在收起状态下显式召回左栏 = 左栏赢：Preview 意图被压回放得下的宽度（持久化）。单一真相：`apps/electron/src/renderer/lib/right-sidebar-width.ts`（+test），消费方 `AppShell.tsx`（阶梯派生 + 双 clamp + navigatorWidth/手柄接线）。面板内正文是**居中阅读列**（`PreviewPanel.tsx` 内容 wrapper `max-w-[928px] mx-auto`，正文 880px 与全屏 overlay 严格同宽）——面板拖宽时多余空间变左右留白，窄时 max-w 不生效。手柄命中区全局 `PANEL_SASH_HIT_WIDTH = 20`（每侧 10px，absolute 实现不占布局；再宽会压聊天区滚动条）。
+拖宽 Preview 时左侧列按**阶梯逐级让位**（`autoCollapseLevel`：0=全显示 → 1=收左栏 → 2=连会话列表也收），拖回去逐级还原。阶梯是**纯派生**（无 state/effect/latch）：阈值按"偏好布局"计算，不受实际收起状态反馈，无震荡。关键设计（2026-07-12 修复的死锁）：**拖拽 clamp 对 Preview 用地板占用（仅 inset+gap=12），不用实际占用**——否则意图宽度被掐死在阈值整数上而触发条件是严格大于，阶梯永远跨不过去。显示宽度仍按实际布局 clamp，聊天永远 ≥320。Cmd+B 在收起状态下显式召回左栏 = 左栏赢：Preview 意图被压回放得下的宽度（持久化）。单一真相：`apps/electron/src/renderer/lib/right-sidebar-width.ts`（+test），消费方 `AppShell.tsx`（阶梯派生 + 双 clamp + navigatorWidth/手柄接线）。面板内正文是**居中阅读列**（`PreviewPanel.tsx` 内容 wrapper `max-w-[928px] mx-auto`，正文 880px 与全屏 overlay 严格同宽）——面板拖宽时多余空间变左右留白，窄时 max-w 不生效。手柄命中区全局 `PANEL_SASH_HIT_WIDTH = 20`（每侧 10px，absolute 实现不占布局；再宽会压聊天区滚动条）。**`@container/shell` 必须与 `shellRef` 同元素**（AppShell 外层布局 div）：index.css 的移动端触屏放大（`@container shell ≤768px`，panel-header-btn 44px 等）与 JS `isAutoCompact` 要量同一块地形——曾挂在 PanelStackContainer 面板条上，Preview 拖宽把聊天条压到 <768px 即误触发手机模式（头部图标突然变大）。
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 

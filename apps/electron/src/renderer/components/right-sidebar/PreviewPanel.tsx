@@ -16,6 +16,10 @@
  * between tabs is instant. ⌘R while this panel is active refreshes the
  * current tab (wired through useLinkInterceptor's keyboard listener via
  * a per-panel refresh trigger).
+ *
+ * 正文是居中阅读列（880px，与全屏 overlay 同宽）；右缘挂 OutlineRail 悬浮
+ * 大纲（收起层级条 / 悬停展开 / 点击跳转 / scrollspy），diff 与加载中不显示。
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import * as React from 'react'
@@ -26,6 +30,7 @@ import { createPatch } from 'diff'
 import { Markdown, UnifiedDiffViewer, AnnotatableMarkdownDocument } from '@craft-agent/ui'
 import { usePreviewAnnotations } from '../../atoms/preview-annotations'
 import { usePreviewReadingMode } from '../../atoms/preview-reading-mode'
+import { OutlineRail } from './OutlineRail'
 import { cn } from '@/lib/utils'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
 import { useAppShellContext } from '@/context/AppShellContext'
@@ -407,7 +412,7 @@ function PreviewPanelContent({
                  chat (markdown → DocumentFormattedMarkdownOverlay). Tab stays
                  in the sidebar so the user can come back after closing. */}
               <button
-                onClick={() => onOpenFile(activeTab.filePath)}
+                onClick={() => onOpenFile(activeTab.filePath, { fullscreen: true })}
                 className="p-1 rounded-[6px] transition-colors text-muted-foreground/50 hover:text-foreground"
                 title="Open in full-screen overlay"
               >
@@ -445,14 +450,16 @@ function PreviewPanelContent({
         </div>
       )}
 
-      {/* Content / empty state */}
+      {/* Content / empty state — relative+flex 包裹层：大纲悬浮态 absolute 出流
+          叠在滚动区上，固定态在流内成列（滚动区 flex-1 自动让出宽度） */}
+      <div className="flex-1 min-h-0 relative flex">
       <div
         ref={scrollContainerRef}
         onScroll={(e) => {
           if (!activeTab) return
           scrollPositionsRef.current[activeTab.filePath] = e.currentTarget.scrollTop
         }}
-        className="flex-1 min-h-0 overflow-y-auto"
+        className="flex-1 min-w-0 h-full overflow-y-auto"
       >
         {!activeTab && (
           <div className="h-full flex items-center justify-center px-6 text-center">
@@ -537,6 +544,15 @@ function PreviewPanelContent({
             )}
           </div>
         )}
+      </div>
+      {/* 大纲导航：diff / 加载中 / 空状态不显示；数据从渲染后 DOM 扫描 */}
+      {activeTab && !showDiff && !isLoading && (
+        <OutlineRail
+          scrollRef={scrollContainerRef}
+          content={content}
+          domVersion={`${activeTab.filePath}|${readingMode}|${previewAnnotations.length}`}
+        />
+      )}
       </div>
     </div>
   )

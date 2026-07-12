@@ -2622,9 +2622,13 @@ function AppShellContent({
         />
 
       {/* === OUTER LAYOUT: Unified Panel Stack | Right Sidebar === */}
+      {/* @container/shell 必须在 shellRef 同一元素上：index.css 的移动端触屏放大
+          （@container shell ≤768px）与 JS 的 isAutoCompact 才量同一块地形。
+          之前挂在 PanelStackContainer 的面板条上——右栏拖宽把聊天条压到 <768
+          就误触发手机模式（按钮突然变大）。 */}
       <div
         ref={shellRef}
-        className="flex items-stretch relative"
+        className="flex items-stretch relative @container/shell"
         style={{
           height: '100%',
           paddingRight: isAutoCompact ? 0 : PANEL_EDGE_INSET,

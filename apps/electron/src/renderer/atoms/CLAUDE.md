@@ -14,6 +14,8 @@ preview-annotations.ts: 标注 jotai atomFamily + 3 hooks（usePreviewAnnotation
 
 preview-reading-mode.ts: Preview 面板「阅读模式」全局开关（隐藏/显示高亮批注），普通 atom(false) + usePreviewReadingMode hook，非持久，与 preview-annotations 存储解耦
 
+preview-outline-pinned.ts: Preview 大纲「固定」布局偏好，atomWithStorage `craft-preview-outline-pinned-v1` + usePreviewOutlinePinned hook——持久（对照阅读是工作习惯，跨重启保留，与临时的 reading-mode 相反）
+
 browser-pane.ts: 浏览器 overlay 状态
 
 info-popover.ts: Info panel 展开/收起状态

@@ -6,13 +6,9 @@
 
 import * as React from 'react'
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
-import { File, Folder, FolderOpen, FileText, Image, FileCode, ChevronRight, Eye, ExternalLink } from 'lucide-react'
-import { useSetAtom, useAtomValue } from 'jotai'
+import { File, Folder, FolderOpen, FileText, Image, FileCode, ChevronRight, Maximize2, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppShellContext } from '@/context/AppShellContext'
-import { useNavigation } from '@/contexts/NavigationContext'
-import { focusedSessionIdAtom } from '@/atoms/panel-stack'
-import { sidebarDocsAtomFamily, openSidebarDocTab } from '@/atoms/sidebar-docs'
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -33,7 +29,7 @@ interface TreeNodeProps {
   entry: FileEntry
   depth: number
   onFileClick: (path: string) => void
-  onOpenInSidebar?: (path: string) => void
+  onOpenFullscreen?: (path: string) => void
   /** Map of absolute file path → single-char git status (M/A/D/R/?). */
   gitStatus?: Record<string, string>
 }
@@ -81,7 +77,7 @@ function getIcon(entry: FileEntry, isExpanded: boolean) {
   return <File className={cls} />
 }
 
-const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenInSidebar, gitStatus }: TreeNodeProps) {
+const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenFullscreen, gitStatus }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [children, setChildren] = useState<FileEntry[] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -145,10 +141,11 @@ const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenInSid
               <ExternalLink className="h-3.5 w-3.5" />
               Open
             </StyledContextMenuItem>
-            {isMarkdown && onOpenInSidebar && (
-              <StyledContextMenuItem onSelect={() => onOpenInSidebar(entry.path)}>
-                <Eye className="h-3.5 w-3.5" />
-                Open in sidebar
+            {/* .md 左键/Open 已默认进 Preview 看板——这里提供显式全屏旁路 */}
+            {isMarkdown && onOpenFullscreen && (
+              <StyledContextMenuItem onSelect={() => onOpenFullscreen(entry.path)}>
+                <Maximize2 className="h-3.5 w-3.5" />
+                Open in fullscreen
               </StyledContextMenuItem>
             )}
           </StyledContextMenuContent>
@@ -175,7 +172,7 @@ const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenInSid
               entry={child}
               depth={depth + 1}
               onFileClick={onFileClick}
-              onOpenInSidebar={onOpenInSidebar}
+              onOpenFullscreen={onOpenFullscreen}
               gitStatus={gitStatus}
             />
           ))}
@@ -250,18 +247,12 @@ export function WorkingDirectoryTree({ dirPath, filterQuery, refreshToken }: Wor
   }, [onOpenFile])
 
   // ┌─────────────────────────────────────────────────────────────────────┐
-  // │ "Open in sidebar" — push the file as a tab into the per-session    │
-  // │ sidebar-docs atom and force-open the preview panel.                │
-  // │ Falls back gracefully when no session is focused.                  │
+  // │ "Open in fullscreen" — .md 的默认打开已 dock 进 Preview 看板        │
+  // │（拦截器路由），右键提供显式全屏 overlay 旁路。                       │
   // └─────────────────────────────────────────────────────────────────────┘
-  const focusedSessionId = useAtomValue(focusedSessionIdAtom)
-  const setSidebarDocs = useSetAtom(sidebarDocsAtomFamily(focusedSessionId ?? '__none__'))
-  const { updateRightSidebar } = useNavigation()
-  const handleOpenInSidebar = useCallback((path: string) => {
-    if (!focusedSessionId) return
-    setSidebarDocs((prev) => openSidebarDocTab(prev, path))
-    updateRightSidebar({ type: 'preview' })
-  }, [focusedSessionId, setSidebarDocs, updateRightSidebar])
+  const handleOpenFullscreen = useCallback((path: string) => {
+    onOpenFile(path, { fullscreen: true })
+  }, [onOpenFile])
 
   if (isLoading || items === null) {
     return (
@@ -290,7 +281,7 @@ export function WorkingDirectoryTree({ dirPath, filterQuery, refreshToken }: Wor
           entry={item}
           depth={0}
           onFileClick={handleFileClick}
-          onOpenInSidebar={handleOpenInSidebar}
+          onOpenFullscreen={handleOpenFullscreen}
           gitStatus={gitStatus}
         />
       ))}

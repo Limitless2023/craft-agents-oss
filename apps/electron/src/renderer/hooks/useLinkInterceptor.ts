@@ -52,6 +52,8 @@ interface MarkdownPreview {
   filePath: string
   content: string | null
   error?: string
+  /** 显式全屏（Preview 看板的 ⤢ 按钮）——跳过 FilePreviewRenderer 的自动 dock 到侧边栏 */
+  fullscreen?: boolean
 }
 
 interface JSONPreview {
@@ -116,8 +118,9 @@ interface LinkInterceptorOptions {
 // ── Hook return type ───────────────────────────────────────────────────────────
 
 interface LinkInterceptorResult {
-  /** Replacement for App.tsx handleOpenFile — classifies and routes */
-  handleOpenFile: (path: string) => void
+  /** Replacement for App.tsx handleOpenFile — classifies and routes.
+   * opts.fullscreen: markdown 显式走全屏 overlay（跳过默认的 dock 到 Preview 看板） */
+  handleOpenFile: (path: string, opts?: { fullscreen?: boolean }) => void
   /** Replacement for App.tsx handleOpenUrl — always opens externally */
   handleOpenUrl: (url: string) => void
   /** Open file directly in external app, bypassing classification/preview */
@@ -170,7 +173,7 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
    * state is needed. This avoids null-content issues in overlay components
    * (e.g., @uiw/react-json-view crashes on null value).
    */
-  const handleOpenFile = useCallback(async (path: string) => {
+  const handleOpenFile = useCallback(async (path: string, opts?: { fullscreen?: boolean }) => {
     // ┌───────────────────────────────────────────────────────────────────┐
     // │ Resolve relative paths against active session's working directory │
     // │                                                                   │
@@ -227,7 +230,7 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
     let firstError: unknown
     try {
       const content = await optionsRef.current.readFile(resolvedPath)
-      const state = buildInitialTextState(type, resolvedPath)
+      const state = buildInitialTextState(type, resolvedPath, opts?.fullscreen)
       setPreviewState({ ...state, content } as FilePreviewState)
       return
     } catch (err) {
@@ -247,7 +250,7 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
     if (fuzzy) {
       try {
         const content = await optionsRef.current.readFile(fuzzy)
-        const state = buildInitialTextState(type, fuzzy)
+        const state = buildInitialTextState(type, fuzzy, opts?.fullscreen)
         setPreviewState({ ...state, content } as FilePreviewState)
         return
       } catch {
@@ -263,7 +266,7 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
     // │ classified as a previewable text file. Surface the diagnostic.  │
     // └─────────────────────────────────────────────────────────────────┘
     const errorMsg = firstError instanceof Error ? firstError.message : 'Failed to read file'
-    const state = buildInitialTextState(type, resolvedPath)
+    const state = buildInitialTextState(type, resolvedPath, opts?.fullscreen)
     setPreviewState({ ...state, content: '', error: errorMsg } as FilePreviewState)
   }, []) // Stable: uses optionsRef
 
@@ -431,12 +434,12 @@ async function fuzzyResolvePath(
  * Build the initial preview state for text-based file types.
  * Content is null initially (loading), and gets populated after async read.
  */
-function buildInitialTextState(type: FilePreviewType, path: string): FilePreviewState {
+function buildInitialTextState(type: FilePreviewType, path: string, fullscreen?: boolean): FilePreviewState {
   switch (type) {
     case 'code':
       return { type: 'code', filePath: path, content: null, language: getLanguageFromPath(path) }
     case 'markdown':
-      return { type: 'markdown', filePath: path, content: null }
+      return { type: 'markdown', filePath: path, content: null, fullscreen }
     case 'json':
       return { type: 'json', filePath: path, content: null }
     case 'text':

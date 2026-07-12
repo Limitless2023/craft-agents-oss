@@ -18,8 +18,7 @@ import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useState, useEffect, useCallback, useRef, memo } from 'react'
 import { AnimatePresence, motion, type Variants } from 'motion/react'
-import { File, Folder, FolderOpen, FileText, Image, FileCode, ChevronRight, ExternalLink, Eye } from 'lucide-react'
-import { useSetAtom } from 'jotai'
+import { File, Folder, FolderOpen, FileText, Image, FileCode, ChevronRight, ExternalLink, Maximize2 } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -30,10 +29,8 @@ import type { SessionFile } from '../../../shared/types'
 import { cn } from '@/lib/utils'
 import * as storage from '@/lib/local-storage'
 import { useAppShellContext } from '@/context/AppShellContext'
-import { useNavigation } from '@/contexts/NavigationContext'
 import { getFileManagerName } from '@/lib/platform'
 import { restoreSessionFileWatch } from './session-files-watch'
-import { sidebarDocsAtomFamily, openSidebarDocTab } from '@/atoms/sidebar-docs'
 
 /**
  * Stagger animation variants for child items - matches LeftSidebar pattern
@@ -280,7 +277,7 @@ interface FileTreeItemProps {
   onFileDoubleClick: (file: SessionFile) => void
   onRevealInFileManager: (path: string) => void
   /** Open the file as a tab in the sidebar preview pane. .md files only. */
-  onOpenInSidebar?: (file: SessionFile) => void
+  onOpenFullscreen?: (file: SessionFile) => void
   /** Whether this item is inside an expanded folder (for stagger animation) */
   isNested?: boolean
 }
@@ -300,7 +297,7 @@ function FileTreeItem({
   onFileClick,
   onFileDoubleClick,
   onRevealInFileManager,
-  onOpenInSidebar,
+  onOpenFullscreen,
   isNested,
 }: FileTreeItemProps) {
   const { t } = useTranslation()
@@ -394,11 +391,11 @@ function FileTreeItem({
               {t("chat.openFile")}
             </StyledContextMenuItem>
           )}
-          {/* Open in sidebar — .md only (scope decision; matches user's preview intent) */}
-          {file.type === 'file' && /\.md$/i.test(file.name) && onOpenInSidebar && (
-            <StyledContextMenuItem onSelect={() => onOpenInSidebar(file)}>
-              <Eye className="h-3.5 w-3.5" />
-              Open in sidebar
+          {/* Open in fullscreen — .md only（默认打开已进 Preview 看板，这里是显式全屏旁路） */}
+          {file.type === 'file' && /\.md$/i.test(file.name) && onOpenFullscreen && (
+            <StyledContextMenuItem onSelect={() => onOpenFullscreen(file)}>
+              <Maximize2 className="h-3.5 w-3.5" />
+              Open in fullscreen
             </StyledContextMenuItem>
           )}
           {/* Show in file manager */}
@@ -445,7 +442,7 @@ function FileTreeItem({
                         onFileClick={onFileClick}
                         onFileDoubleClick={onFileDoubleClick}
                         onRevealInFileManager={onRevealInFileManager}
-                        onOpenInSidebar={onOpenInSidebar}
+                        onOpenFullscreen={onOpenFullscreen}
                         isNested={true}
                       />
                     </motion.div>
@@ -576,19 +573,12 @@ export function SessionFilesSection({ sessionId, className, sessionFolderPath, h
   const fileManagerName = getFileManagerName()
 
   // ┌─────────────────────────────────────────────────────────────────────┐
-  // │ "Open in sidebar" — pushes a .md file as a tab into the Preview     │
-  // │ panel's per-session atom and switches the right sidebar to that    │
-  // │ panel so the user immediately sees the tab.                        │
+  // │ "Open in fullscreen" — .md 的默认打开已 dock 进 Preview 看板        │
+  // │（拦截器路由），右键提供显式全屏 overlay 旁路。                       │
   // └─────────────────────────────────────────────────────────────────────┘
-  const setSidebarDocs = useSetAtom(sidebarDocsAtomFamily(sessionId ?? '__none__'))
-  const { updateRightSidebar } = useNavigation()
-  const handleOpenInSidebar = useCallback((file: SessionFile) => {
-    if (!sessionId) return
-    setSidebarDocs((prev) => openSidebarDocTab(prev, file.path))
-    // Force-open (not toggle) so a second "Open in sidebar" on a different
-    // file doesn't accidentally close the panel that just gained a new tab.
-    updateRightSidebar({ type: 'preview' })
-  }, [sessionId, setSidebarDocs, updateRightSidebar])
+  const handleOpenFullscreen = useCallback((file: SessionFile) => {
+    onOpenFile(file.path, { fullscreen: true })
+  }, [onOpenFile])
 
   // Reveal a file/folder in the system file manager
   const handleRevealInFileManager = useCallback((path: string) => {
@@ -682,7 +672,7 @@ export function SessionFilesSection({ sessionId, className, sessionFolderPath, h
                   onFileClick={handleFileClick}
                   onFileDoubleClick={handleFileDoubleClick}
                   onRevealInFileManager={handleRevealInFileManager}
-                  onOpenInSidebar={handleOpenInSidebar}
+                  onOpenFullscreen={handleOpenFullscreen}
                 />
               ))}
             </nav>

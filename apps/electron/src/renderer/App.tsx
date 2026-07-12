@@ -2270,6 +2270,17 @@ function FilePreviewRenderer({
     onClose()
   }, [focusedSessionId, setSidebarDocs, updateRightSidebar, onClose])
 
+  // ┌─────────────────────────────────────────────────────────────────────┐
+  // │ Markdown 默认改走 Preview 看板（侧边栏对照阅读优先）：状态一到就    │
+  // │ dock 进侧边栏、不渲染 overlay。两条回落到全屏的路径：              │
+  // │   1. state.fullscreen —— Preview 看板 ⤢ 按钮的显式全屏             │
+  // │   2. 无聚焦会话（如冷启动 Finder 打开）—— 看板挂不上               │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const autoDock = state.type === 'markdown' && !state.fullscreen && !!focusedSessionId
+  useEffect(() => {
+    if (autoDock) handleDockToSidebar(overlayFilePath)
+  }, [autoDock, overlayFilePath, handleDockToSidebar])
+
   switch (state.type) {
     case 'image':
       // `key` includes refreshNonce so ⌘R remounts the overlay, dropping
@@ -2313,6 +2324,8 @@ function FilePreviewRenderer({
       )
 
     case 'markdown': {
+      // 自动 dock 即将接管（effect 已排队）——不渲染 overlay，避免闪一帧全屏
+      if (autoDock) return null
       // Show PLAN header for .md files in plans folder (handles both absolute and relative paths)
       const isPlanFile =
         (state.filePath.includes('/plans/') || state.filePath.startsWith('plans/')) &&

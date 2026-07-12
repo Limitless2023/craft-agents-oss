@@ -110,7 +110,8 @@ export interface AppShellContextType {
   ) => void
 
   // File/URL handlers - these can open in tabs or external apps
-  onOpenFile: (path: string) => void
+  // opts.fullscreen: markdown 显式走全屏 overlay（默认 dock 到 Preview 看板）
+  onOpenFile: (path: string, opts?: { fullscreen?: boolean }) => void
   onOpenUrl: (url: string) => void
 
   // Workspace
