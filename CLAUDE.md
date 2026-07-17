@@ -165,6 +165,7 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 - **导出独立 HTML**：overlay 头部 Download 按钮 → `buildStandaloneVizDocument`（主题按导出时快照**烘焙**、无桥脚本、同一份断网 CSP）写 `<原名>-standalone.html` 到源文件旁（复用我们的 `file:write` IPC）→ Finder 自动显示。浏览器直接可开、可分享。
 - **文件树白名单**：会话文件树的点目录过滤对 `.craft` 开例外（`server-core/files.ts`，**main 进程改动**）。
 - 桥逻辑抽成 `use-viz-bridge.ts` 供消息块与 overlay 共用（主题推送/resize 接收/S7 校验/follow-up 回执单一实现）。
+- **主题语义翻译**（2026-07-17 bug 修复）：Craft 宿主品牌色叫 `--accent`（无 `--primary`），Codex css 主色叫 `--primary`（`--viz-series-*` 派生源）——`withVizSemanticAliases`（viz-host.ts）在**快照层**做 accent→primary 别名，三个注入点自动继承；不改则图表系列色永远默认蓝。
 
 **New files:** `packages/ui/src/components/markdown/{viz-host.ts, viz-assets.ts(生成物，源=resources/skills/visualize/assets/visualize.css), MarkdownVizBlock.tsx, use-viz-bridge.ts, __tests__/viz-host.test.ts}`、`packages/ui/src/components/overlay/VizPreviewOverlay.tsx`、`resources/skills/visualize/{SKILL.md, assets/visualize.css}`
 

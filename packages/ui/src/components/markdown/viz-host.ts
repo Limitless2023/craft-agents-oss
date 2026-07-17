@@ -101,6 +101,19 @@ export type VizThemeSnapshot = {
   tokens: Record<string, string>
 }
 
+/**
+ * 语义翻译层：Craft 宿主的品牌主色叫 `--accent`（无 `--primary`），而 Codex
+ * visualize.css 的主色叫 `--primary`（`--viz-series-1` 等图表系列色由它派生）。
+ * 桥若只"搬运"不"翻译"，沙箱里 `--primary` 永远落回 css 默认蓝。
+ * 在快照层做一次别名映射，三个注入点（初始注入 / 桥脚本 applyTheme / standalone
+ * 导出）自动继承，单点修复。
+ */
+export function withVizSemanticAliases(tokens: Record<string, string>): Record<string, string> {
+  const out = { ...tokens }
+  if (out['accent'] && !out['primary']) out['primary'] = out['accent']
+  return out
+}
+
 export function readVizTheme(root: HTMLElement = document.documentElement): VizThemeSnapshot {
   const styles = getComputedStyle(root)
   const tokens: Record<string, string> = {}
@@ -110,7 +123,7 @@ export function readVizTheme(root: HTMLElement = document.documentElement): VizT
   }
   return {
     mode: root.classList.contains('dark') ? 'dark' : 'light',
-    tokens,
+    tokens: withVizSemanticAliases(tokens),
   }
 }
 

@@ -13,6 +13,7 @@ import {
   classifyVizReadError,
   parseVizFence,
   safeInlineScript,
+  withVizSemanticAliases,
   VIZ_CSP,
   VIZ_IFRAME_SANDBOX,
   VIZ_MAX_FILE_BYTES,
@@ -84,6 +85,17 @@ describe('clampVizHeight', () => {
     expect(clampVizHeight('300')).toBeNull()
     expect(clampVizHeight(Number.NaN)).toBeNull()
     expect(clampVizHeight(Number.POSITIVE_INFINITY)).toBeNull()
+  })
+})
+
+describe('withVizSemanticAliases', () => {
+  test('宿主 --accent 翻译为沙箱 --primary（--viz-series-1 的来源）', () => {
+    expect(withVizSemanticAliases({ accent: 'purple' })).toEqual({ accent: 'purple', primary: 'purple' })
+  })
+
+  test('已有 primary 时不覆盖；无 accent 时不凭空造', () => {
+    expect(withVizSemanticAliases({ accent: 'purple', primary: 'red' }).primary).toBe('red')
+    expect(withVizSemanticAliases({ foreground: '#111' })).toEqual({ foreground: '#111' })
   })
 })
 
