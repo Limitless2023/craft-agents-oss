@@ -149,6 +149,23 @@ Preview 面板宽度**没有绝对上限**（2026-07-12 删除了 `PREVIEW_MAX_W
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 
+### Inline Interactive Visualization — 对话内交互可视化（```viz fence）
+
+Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动），沙箱渲染、主题实时跟随、高度自适应。按 spec（`~/.craft-agent/workspaces/my-workspace/sessions/260717-still-swamp/spec-对话内交互可视化.md`）裁剪实现，参考 KouriVar/Craft-Agents `my-changes` 分支（同源 fork，运行时近乎直接移植）。
+
+对 spec 的三处裁剪（评估定稿）：
+1. **fence 语法替代 `::inline-vis` 指令**：Agent 写文件到 `<cwd>/.craft/visualizations/<title>.html`，回答中输出 ```viz fence（体=绝对路径一行）。复用 `Markdown.tsx` 现成 fence 路由（与 html-preview 同款），流式/回放天然一致（spec G7 最大坑直接消失），围栏内示例不渲染是 markdown 语义白送的。
+2. **复用 `file:read` IPC**：主进程 `validateFilePath` 已有允许根目录 + realpath 符号链接还原（S4）+ 敏感文件黑名单；2MB 上限（S5）与错误分类在前端补。**零新 IPC → renderer-only**。
+3. **技能装 `~/.agents/skills/visualize/`**（global 级=最低优先级，workspace/project 同名自然覆盖）：技能加载器无"内置 resources"概念，不新增机制。源文件在仓内 `resources/skills/visualize/`（SKILL.md 从 Codex 原版改写：fence 语法、**无 CDN 全内联**、无 lucide/tooltip 运行时、Maps 断网约束、删 Standalone/Sites），改后 `cp -r resources/skills/visualize ~/.agents/skills/` 重装。
+
+安全红线（收紧于参考实现）：iframe `sandbox="allow-scripts"`（**绝不**加 allow-same-origin——与 MarkdownHtmlBlock 恰相反，后者 same-origin 无脚本，**两组件刻意分离不合并**）；CSP 无任何网络源（比 spec 更严：删掉 CDN 白名单，堵"经 CDN URL 查询串外带"通道）；postMessage 双向校验 source 标识（S7）。红线有测试静态守护（`__tests__/viz-host.test.ts`，12 用例）。G8 追问回传留二期：桥保留 `window.openai/craft.sendFollowUpMessage` API 面，宿主统一回执 unsupported。
+
+**New files:** `packages/ui/src/components/markdown/{viz-host.ts, viz-assets.ts(生成物，源=resources/skills/visualize/assets/visualize.css), MarkdownVizBlock.tsx, __tests__/viz-host.test.ts}`、`resources/skills/visualize/{SKILL.md, assets/visualize.css}`
+
+**Modified files:** `packages/ui/src/components/markdown/Markdown.tsx`（'viz' 入 DisablablePreviewBlock + minimal/full 两处路由）、7× i18n（`viz.*` 6 键）。
+
+**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`；技能变更另需重拷 `~/.agents/skills/visualize/`。
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

@@ -13,6 +13,7 @@ import { MarkdownMermaidBlock } from './MarkdownMermaidBlock'
 import { MarkdownDatatableBlock } from './MarkdownDatatableBlock'
 import { MarkdownSpreadsheetBlock } from './MarkdownSpreadsheetBlock'
 import { MarkdownHtmlBlock } from './MarkdownHtmlBlock'
+import { MarkdownVizBlock } from './MarkdownVizBlock'
 import { MarkdownImageBlock } from './MarkdownImageBlock'
 import { MarkdownLatexBlock } from './MarkdownLatexBlock'
 import { MarkdownPdfBlock } from './MarkdownPdfBlock'
@@ -37,6 +38,7 @@ export type DisablablePreviewBlock =
   | 'html-preview'
   | 'pdf-preview'
   | 'image-preview'
+  | 'viz'
 
 /**
  * Render modes for markdown content:
@@ -294,6 +296,10 @@ function createComponents(
           if (match?.[1] === 'html-preview' && isPreviewEnabled('html-preview')) {
             return wrapBlock('html-preview', code, <MarkdownHtmlBlock code={code} className="my-2" />, props.node?.position)
           }
+          // 交互可视化块 → 沙箱 iframe（allow-scripts，断网，主题跟随）
+          if (match?.[1] === 'viz' && isPreviewEnabled('viz')) {
+            return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" />, props.node?.position)
+          }
           // PDF preview blocks → inline first page with expand to full viewer
           if (match?.[1] === 'pdf-preview' && isPreviewEnabled('pdf-preview')) {
             return wrapBlock('pdf-preview', code, <MarkdownPdfBlock code={code} className="my-2" />, props.node?.position)
@@ -431,6 +437,10 @@ function createComponents(
         // HTML preview blocks → sandboxed iframe
         if (match?.[1] === 'html-preview' && isPreviewEnabled('html-preview')) {
           return wrapBlock('html-preview', code, <MarkdownHtmlBlock code={code} className="my-2" />, props.node?.position)
+        }
+        // 交互可视化块 → 沙箱 iframe（allow-scripts，断网，主题跟随）
+        if (match?.[1] === 'viz' && isPreviewEnabled('viz')) {
+          return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" />, props.node?.position)
         }
         // PDF preview blocks → inline first page with expand to full viewer
         if (match?.[1] === 'pdf-preview' && isPreviewEnabled('pdf-preview')) {
