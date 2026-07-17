@@ -17,8 +17,16 @@ import { DEFAULT_MODEL, getModelShortName } from '@config/models'
 import { getDefaultModelsForConnection, type LlmConnectionWithStatus } from '@config/llm-connections'
 import type { SessionStatus } from '@/config/session-status-config'
 import type { KanbanColumnDef } from '@craft-agent/shared/projects/types'
+import {
+  createInitialState,
+  toggleSelect,
+  rangeSelect,
+  removeFromSelection,
+  type MultiSelectState,
+} from '@/hooks/useMultiSelect'
 import { KanbanBoard } from './KanbanBoard'
-import { KANBAN_COLUMNS, statusToColumn } from './status-column'
+import { BoardSelectionBar } from './BoardSelectionBar'
+import { KANBAN_COLUMNS, statusToColumn, bucketTasksByColumn } from './status-column'
 import { BoardListToggle } from './BoardListToggle'
 import { KanbanProjectFilter, type KanbanProjectFilterOption } from './KanbanProjectFilter'
 import { TaskEditor } from './TaskEditor'
@@ -298,6 +306,76 @@ export function KanbanBoardContainer() {
 
   const defaultSubtaskModel = modelToConnection.has(DEFAULT_MODEL) ? DEFAULT_MODEL : undefined
 
+  // ===========================================================================
+  // 批量选择（batch selection）——纯呈现层状态，key 为任务(session) id。
+  // 选择手势：⌘/Ctrl 点击切换、Shift 区间选、列头菜单按列/按状态并入；
+  // 动作统一由底部 BoardSelectionBar 执行（改状态 / 归档 / 已取消并归档）。
+  // ===========================================================================
+  const [selection, setSelection] = React.useState<MultiSelectState>(createInitialState)
+  const selectionActive = selection.selectedIds.size > 0
+
+  // Shift 区间选的"平铺视觉序"：列从左到右、列内从上到下，分桶逻辑与
+  // KanbanBoard 渲染共用同一个 bucketTasksByColumn，保证两序永远一致。
+  const orderedTaskIds = React.useMemo(() => {
+    const buckets = bucketTasksByColumn(visibleTasks, activeColumns)
+    const ids: string[] = []
+    for (const column of activeColumns) {
+      for (const task of buckets.get(column.id) ?? []) ids.push(task.id)
+    }
+    return ids
+  }, [visibleTasks, activeColumns])
+
+  // 选中的任务从看板消失（归档/换 workspace/被过滤）时同步剪除，避免幽灵选中。
+  const visibleIdSet = React.useMemo(() => new Set(visibleTasks.map(task => task.id)), [visibleTasks])
+  React.useEffect(() => {
+    setSelection(prev => {
+      if (prev.selectedIds.size === 0) return prev
+      const gone = [...prev.selectedIds].filter(id => !visibleIdSet.has(id))
+      return gone.length ? removeFromSelection(prev, gone) : prev
+    })
+  }, [visibleIdSet])
+
+  // Esc 退出选择模式。有浮层（弹出菜单/下拉）打开时让位——那次 Esc 属于浮层。
+  React.useEffect(() => {
+    if (!selectionActive) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (document.querySelector('[data-radix-popper-content-wrapper]')) return
+      setSelection(createInitialState())
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectionActive])
+
+  const handleTileSelect = React.useCallback(
+    (taskId: string, opts: { range: boolean }) => {
+      setSelection(prev => {
+        const index = orderedTaskIds.indexOf(taskId)
+        if (opts.range) return rangeSelect(prev, index, orderedTaskIds)
+        // toggleSelect 保底不清空（列表语义）；看板上取消最后一个 = 退出选择模式。
+        if (prev.selectedIds.size === 1 && prev.selectedIds.has(taskId)) return createInitialState()
+        return toggleSelect(prev, taskId, index)
+      })
+    },
+    [orderedTaskIds]
+  )
+
+  // 列头菜单：并入（不是替换）选择集，可跨列、跨状态组累加。
+  const handleSelectTasks = React.useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return
+      setSelection(prev => {
+        const merged = new Set(prev.selectedIds)
+        for (const id of ids) merged.add(id)
+        const anchor = ids[0]
+        return { selected: anchor, selectedIds: merged, anchorId: anchor, anchorIndex: orderedTaskIds.indexOf(anchor) }
+      })
+    },
+    [orderedTaskIds]
+  )
+
+  const clearSelection = React.useCallback(() => setSelection(createInitialState()), [])
+
   const handleToggleSubtasks = React.useCallback((taskId: string) => {
     setExpandedTaskIds(prev => {
       const next = new Set(prev)
@@ -406,6 +484,60 @@ export function KanbanBoardContainer() {
     },
     [updateSessionMeta, activeColumns, columnStatus, statusesById, handleChangeStatus]
   )
+
+  // 批量改状态时状态应折叠到哪根列：显式配置了该 drop-status 的列优先，其次内建
+  // 默认映射（仅默认三列视图）；自定义列且无映射 → null（不动落位）。
+  const resolveColumnForStatus = React.useCallback(
+    (statusId: string): KanbanColumnId | null => {
+      const configured = activeColumns.find(c => (c.dropStatusId ?? columnStatus[c.id]) === statusId)
+      if (configured) return configured.id
+      return usingProjectColumns ? null : statusToColumn(statusId)
+    },
+    [activeColumns, columnStatus, usingProjectColumns]
+  )
+
+  // 批量改状态。必须同步写落位：拖动过的卡片带着持久化 kanbanColumn，只改状态
+  // 它会赖在原列不走（例如已取消的卡片划着删除线留在待办列）。
+  const handleBatchStatus = React.useCallback(
+    (statusId: string) => {
+      const ids = [...selection.selectedIds]
+      const column = resolveColumnForStatus(statusId)
+      for (const id of ids) {
+        handleChangeStatus(id, statusId)
+        if (column) {
+          updateSessionMeta(id, { kanbanColumn: column })
+          void window.electronAPI.sessionCommand(id, { type: 'setKanbanColumn', column })
+        }
+      }
+      clearSelection()
+      toast(t('kanban.select.toastStatus', { count: ids.length }))
+    },
+    [selection.selectedIds, resolveColumnForStatus, handleChangeStatus, updateSessionMeta, clearSelection, t]
+  )
+
+  const handleBatchArchive = React.useCallback(() => {
+    const ids = [...selection.selectedIds]
+    for (const id of ids) {
+      updateSessionMeta(id, { isArchived: true })
+      void window.electronAPI.sessionCommand(id, { type: 'archive' })
+    }
+    clearSelection()
+    toast(t('kanban.select.toastArchived', { count: ids.length }))
+  }, [selection.selectedIds, updateSessionMeta, clearSelection, t])
+
+  // "清理"组合动作：标记已取消 + 清掉列落位残留 + 归档。看板即刻干净，
+  // 列表视图可随时找回；清残留保证日后取消归档时按状态正确落列。
+  const handleBatchCancelArchive = React.useCallback(() => {
+    const ids = [...selection.selectedIds]
+    for (const id of ids) {
+      updateSessionMeta(id, { sessionStatus: 'cancelled', kanbanColumn: undefined, isArchived: true })
+      void window.electronAPI.sessionCommand(id, { type: 'setSessionStatus', state: 'cancelled' })
+      void window.electronAPI.sessionCommand(id, { type: 'setKanbanColumn', column: null })
+      void window.electronAPI.sessionCommand(id, { type: 'archive' })
+    }
+    clearSelection()
+    toast(t('kanban.select.toastCancelArchived', { count: ids.length }))
+  }, [selection.selectedIds, updateSessionMeta, clearSelection, t])
 
   // Persist a full ordered column set onto the focused project. The `projects:changed`
   // broadcast refreshes `projectsAtom`, so the board reflows without optimistic state.
@@ -557,7 +689,7 @@ export function KanbanBoardContainer() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="relative flex h-full flex-col bg-background">
       <div className="flex items-center justify-between gap-2 border-b border-border/50 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="text-sm font-medium">{t('kanban.allTasks')}</span>
@@ -607,6 +739,9 @@ export function KanbanBoardContainer() {
           defaultSubtaskModel={defaultSubtaskModel}
           onCreateTask={handleCreateTask}
           onMoveTask={handleMoveTask}
+          selectedIds={selection.selectedIds}
+          onTileSelect={handleTileSelect}
+          onSelectTasks={handleSelectTasks}
           columnDropStatus={columnStatus}
           onSelectDropStatus={handleSelectDropStatus}
           {...(editingProject
@@ -618,6 +753,16 @@ export function KanbanBoardContainer() {
             : {})}
         />
       </div>
+      {selectionActive && (
+        <BoardSelectionBar
+          count={selection.selectedIds.size}
+          statuses={sessionStatuses ?? []}
+          onSetStatus={handleBatchStatus}
+          onArchive={handleBatchArchive}
+          onCancelAndArchive={handleBatchCancelArchive}
+          onClear={clearSelection}
+        />
+      )}
     </div>
   )
 }

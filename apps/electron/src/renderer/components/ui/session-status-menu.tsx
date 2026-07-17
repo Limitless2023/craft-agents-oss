@@ -26,7 +26,7 @@ const MENU_ITEM_STYLE = 'flex cursor-pointer select-none items-center gap-3 roun
 // StateItemContent - Shared item rendering
 // ============================================================================
 
-const DEFAULT_STATUS_IDS = new Set(['backlog', 'todo', 'needs-review', 'done', 'cancelled'])
+export const DEFAULT_STATUS_IDS = new Set(['backlog', 'todo', 'needs-review', 'done', 'cancelled'])
 
 function StateItemContent({ state }: { state: SessionStatus }) {
   const { t } = useTranslation()

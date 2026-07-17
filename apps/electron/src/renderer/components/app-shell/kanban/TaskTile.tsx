@@ -73,6 +73,12 @@ interface TaskTileProps {
   subtaskModelGroups?: KanbanModelProviderGroup[]
   /** Model id pre-selected in the composer (defaults to the first catalog model). */
   defaultSubtaskModel?: string
+  /** 本卡片处于看板批量选择集中（高亮环 + 勾选圆点）。 */
+  selected?: boolean
+  /** 看板任一卡片被选中 = 选择模式：普通点击变为切换选中而非打开会话。 */
+  selectionActive?: boolean
+  /** 修饰键点击 / 选择模式下点击。`range` = Shift 区间选。 */
+  onSelectToggle?: (opts: { range: boolean }) => void
 }
 
 /**
@@ -99,6 +105,9 @@ export function TaskTile({
   onRunSubtasks,
   subtaskModelGroups,
   defaultSubtaskModel,
+  selected,
+  selectionActive,
+  onSelectToggle,
 }: TaskTileProps) {
   const { t } = useTranslation()
   const livePulseEnabled = useAtomValue(kanbanLivePulseAtom)
@@ -134,7 +143,15 @@ export function TaskTile({
     <div
       role="button"
       tabIndex={0}
-      onClick={onClick}
+      onClick={e => {
+        // 修饰键点击（⌘/Ctrl/Shift）或选择模式下的普通点击 → 进/改批量选择，
+        // 不打开会话；其余情况保持原打开行为。
+        if (onSelectToggle && (selectionActive || e.metaKey || e.ctrlKey || e.shiftKey)) {
+          onSelectToggle({ range: e.shiftKey })
+          return
+        }
+        onClick?.()
+      }}
       onKeyDown={e => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
@@ -144,16 +161,31 @@ export function TaskTile({
       className={cn(
         'group relative overflow-hidden rounded-lg border border-border/60 bg-card shadow-minimal',
         'cursor-pointer transition-colors hover:border-border focus-visible:outline-none',
-        'focus-visible:ring-2 focus-visible:ring-ring/50'
+        'focus-visible:ring-2 focus-visible:ring-ring/50',
+        selected && 'border-transparent'
       )}
       style={
-        isLive
-          ? {
-              boxShadow: `0 0 0 1px ${accent}, 0 4px 16px -4px color-mix(in srgb, ${accent} 40%, transparent)`,
-            }
-          : undefined
+        // 选中环优先于 live 光晕（同一 boxShadow 通道，选中态信息量更高）。
+        selected
+          ? { boxShadow: '0 0 0 2px var(--primary)' }
+          : isLive
+            ? {
+                boxShadow: `0 0 0 1px ${accent}, 0 4px 16px -4px color-mix(in srgb, ${accent} 40%, transparent)`,
+              }
+            : undefined
       }
     >
+      {selectionActive && (
+        <div
+          className={cn(
+            'absolute right-2 top-2 z-20 grid h-5 w-5 place-items-center rounded-full border shadow-minimal transition-colors',
+            selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-transparent'
+          )}
+          aria-hidden
+        >
+          <Check className="h-3 w-3" strokeWidth={3} />
+        </div>
+      )}
       {showTint && color && (
         <div
           className="absolute inset-0 pointer-events-none"
@@ -169,7 +201,7 @@ export function TaskTile({
         />
       )}
 
-      {onEdit && (
+      {onEdit && !selectionActive && (
         <button
           type="button"
           data-no-dnd="true"

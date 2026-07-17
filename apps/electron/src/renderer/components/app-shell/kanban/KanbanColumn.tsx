@@ -1,12 +1,19 @@
 import * as React from 'react'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronDown, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ListChecks, Trash2 } from 'lucide-react'
 import { PROJECT_COLOR_PALETTE, type ProjectColorTreatment } from '@/utils/project-colors'
 import { type SessionStatus, getStatusIconStyle } from '@/config/session-status-config'
 import type { KanbanColumnColor } from '@/hooks/useKanbanColumnColors'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { SessionStatusMenu } from '@/components/ui/session-status-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { SessionStatusMenu, DEFAULT_STATUS_IDS } from '@/components/ui/session-status-menu'
 import { TaskTile } from './TaskTile'
 import { NewTaskComposer } from './NewTaskComposer'
 import type {
@@ -43,6 +50,14 @@ interface KanbanColumnProps {
   defaultSubtaskModel?: string
   /** When present, renders the inline "New Task" composer at the top of the column. */
   onCreateTask?: (title: string) => void
+  /** 批量选择：全局选中的卡片 id 集（跨列共享）。 */
+  selectedIds?: Set<string>
+  /** 看板任一卡片被选中 = 选择模式（普通点击变为切换选中）。 */
+  selectionActive?: boolean
+  /** 修饰键点击 / 选择模式下点击某卡片。`range` = Shift 区间选。 */
+  onTileSelect?: (taskId: string, opts: { range: boolean }) => void
+  /** 把一组卡片 id 并入选择集。提供时列头渲染"批量选择"菜单。 */
+  onSelectTasks?: (ids: string[]) => void
   /** Status auto-applied to a task dropped into this column (empty/undefined = leave untouched). */
   dropStatusId?: string
   /** Set this column's drop-status. Enables the header status picker when provided ('' clears). */
@@ -74,6 +89,10 @@ export function KanbanColumn({
   subtaskModelGroups,
   defaultSubtaskModel,
   onCreateTask,
+  selectedIds,
+  selectionActive,
+  onTileSelect,
+  onSelectTasks,
   dropStatusId,
   onSelectDropStatus,
   onRename,
@@ -106,6 +125,9 @@ export function KanbanColumn({
           onSetColor={onSetColor}
           onRemove={onRemove}
         />
+        {onSelectTasks && tasks.length > 0 && (
+          <ColumnSelectMenu tasks={tasks} statuses={statuses} statusesById={statusesById} onSelectTasks={onSelectTasks} />
+        )}
       </div>
 
       <div
@@ -136,6 +158,9 @@ export function KanbanColumn({
               onRunSubtasks={onRunSubtasks ? () => onRunSubtasks(task.id) : undefined}
               subtaskModelGroups={subtaskModelGroups}
               defaultSubtaskModel={defaultSubtaskModel}
+              selected={selectedIds?.has(task.id) ?? false}
+              selectionActive={selectionActive}
+              onSelectToggle={onTileSelect ? opts => onTileSelect(task.id, opts) : undefined}
             />
           </DraggableTile>
         ))}
@@ -338,6 +363,81 @@ function ColumnHeader({
         )}
       </PopoverContent>
     </Popover>
+  )
+}
+
+/**
+ * 列头"批量选择"菜单。只负责"选"——把 id 集并入看板选择集，动作统一由底部
+ * BoardSelectionBar 执行（单一心智模型，避免列头藏直接批量动作误伤）。
+ * 除"全选本列"外，按实际出现的状态分组提供"按状态选择"（带计数）：一根列可能
+ * 混着多种状态（如 ToDo 列同时装着 todo 与 backlog），清理时必须能按状态拆开选。
+ */
+function ColumnSelectMenu({
+  tasks,
+  statuses,
+  statusesById,
+  onSelectTasks,
+}: {
+  tasks: KanbanTask[]
+  statuses?: SessionStatus[]
+  statusesById: Map<string, SessionStatus>
+  onSelectTasks: (ids: string[]) => void
+}) {
+  const { t } = useTranslation()
+
+  // 状态 → 该状态的卡片，按 workspace 状态序排列（与状态菜单一致）。
+  const groups = React.useMemo(() => {
+    const byStatus = new Map<string, KanbanTask[]>()
+    for (const task of tasks) {
+      const list = byStatus.get(task.statusId)
+      if (list) list.push(task)
+      else byStatus.set(task.statusId, [task])
+    }
+    const orderIndex = new Map((statuses ?? []).map((s, i) => [s.id, i]))
+    return [...byStatus.entries()].sort(
+      (a, b) => (orderIndex.get(a[0]) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b[0]) ?? Number.MAX_SAFE_INTEGER)
+    )
+  }, [tasks, statuses])
+
+  const statusLabel = (statusId: string) => {
+    const fallback = statusesById.get(statusId)?.label ?? statusId
+    return DEFAULT_STATUS_IDS.has(statusId) ? t(`status.${statusId}`, fallback) : fallback
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          data-no-dnd="true"
+          onPointerDown={e => e.stopPropagation()}
+          title={t('kanban.select.menu')}
+          aria-label={t('kanban.select.menu')}
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-foreground/40 transition-colors hover:bg-foreground/[0.06] hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-foreground/[0.06] data-[state=open]:text-foreground/80"
+        >
+          <ListChecks className="h-3.5 w-3.5" strokeWidth={2} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[200px]">
+        <DropdownMenuItem className="text-xs" onSelect={() => onSelectTasks(tasks.map(task => task.id))}>
+          {t('kanban.select.all', { count: tasks.length })}
+        </DropdownMenuItem>
+        {groups.length > 1 && (
+          <>
+            <DropdownMenuSeparator />
+            {groups.map(([statusId, group]) => (
+              <DropdownMenuItem
+                key={statusId}
+                className="text-xs"
+                onSelect={() => onSelectTasks(group.map(task => task.id))}
+              >
+                {t('kanban.select.byStatus', { status: statusLabel(statusId), count: group.length })}
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

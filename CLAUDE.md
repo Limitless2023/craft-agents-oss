@@ -133,6 +133,22 @@ Preview 面板宽度**没有绝对上限**（2026-07-12 删除了 `PREVIEW_MAX_W
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 
+### Kanban Batch Select — 看板批量选择 + "已取消并归档"清理
+
+看板（Board 视图）批量操作：⌘/Ctrl 点击切换选中、Shift 区间选（跨列，平铺视觉序）、列头 ListChecks 菜单"全选本列 / 按状态选择（带计数）"；任一卡片选中即进入选择模式（普通点击变切换、卡片右上角出勾选圆点、Esc 退出），底部浮出操作条：改状态 / 归档 / **已取消并归档**（清理组合）/ 清除。
+
+关键设计：
+1. **列 ≠ 状态**（上游 6 状态折叠进 3 列，ToDo 列混装 todo+backlog）→ 列头菜单必须提供按状态拆选；列头菜单**只负责选**，动作统一走操作条（单一心智模型）。
+2. **批量改状态同步修正落位**：拖动过的卡片带持久化 `kanbanColumn`，只改状态会赖在原列——`resolveColumnForStatus`（显式 drop-status 列优先 → 内建映射 → 自定义列不动）后补发 `setKanbanColumn`。
+3. **清理组合** = `setSessionStatus: cancelled` + `setKanbanColumn: null`（清残留，日后 unarchive 按状态正确落列）+ `archive`（看板消失、列表可找回）。逐 id 循环现成 `sessionCommand`，无新 IPC。
+4. 选择区间序与渲染序共用 `bucketTasksByColumn`（抽进 `status-column.ts`），两序永不漂移；选中任务从看板消失时 effect 自动剪除。
+
+**New files:** `kanban/BoardSelectionBar.tsx`（浮动操作条，复用 `SessionStatusMenu`）
+
+**Modified files:** `kanban/{KanbanBoardContainer,KanbanBoard,KanbanColumn,TaskTile}.tsx`（选择态接线 + `ColumnSelectMenu` 列头菜单）、`kanban/status-column.ts`（`bucketTasksByColumn`）、`ui/session-status-menu.tsx`（export `DEFAULT_STATUS_IDS`）、7× i18n（`kanban.select.*` 13 键，锚点插入保持局部字典序）。选择基建复用 `hooks/useMultiSelect.ts` 纯函数（SessionList 同款）。
+
+**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

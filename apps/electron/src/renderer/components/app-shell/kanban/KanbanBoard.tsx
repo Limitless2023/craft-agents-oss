@@ -15,6 +15,7 @@ import { SmartPointerSensor } from '@/components/ui/sortable-list'
 import type { ProjectColorTreatment } from '@/utils/project-colors'
 import type { SessionStatus } from '@/config/session-status-config'
 import { useKanbanColumnColors, makeColumnColor } from '@/hooks/useKanbanColumnColors'
+import { bucketTasksByColumn } from './status-column'
 import { KanbanColumn } from './KanbanColumn'
 import { TaskTile } from './TaskTile'
 import type {
@@ -64,6 +65,12 @@ interface KanbanBoardProps {
   onRemoveColumn?: (columnId: string) => void
   /** Append a new custom column (single-project edit mode). Renders the "add column" affordance. */
   onAddColumn?: () => void
+  /** 批量选择：当前被选中的卡片 id 集。非空即进入选择模式（普通点击变为切换选中）。 */
+  selectedIds?: Set<string>
+  /** 修饰键点击 / 选择模式下点击某卡片。`range` = Shift 区间选。 */
+  onTileSelect?: (taskId: string, opts: { range: boolean }) => void
+  /** 把一组卡片 id 并入选择集（列头"批量选择"菜单）。提供时列头显示该菜单。 */
+  onSelectTasks?: (ids: string[]) => void
 }
 
 /**
@@ -97,25 +104,16 @@ export function KanbanBoard({
   onUpdateColumn,
   onRemoveColumn,
   onAddColumn,
+  selectedIds,
+  onTileSelect,
+  onSelectTasks,
 }: KanbanBoardProps) {
   const { t } = useTranslation()
-  const firstColumnId = columns[0]?.id
 
-  const tasksByColumn = React.useMemo(() => {
-    const known = new Set(columns.map(c => c.id))
-    const buckets = new Map<KanbanColumnId, KanbanTask[]>()
-    for (const c of columns) buckets.set(c.id, [])
-    for (const task of tasks) {
-      // A tile whose persisted column no longer exists falls back to the first column.
-      const target = known.has(task.column) ? task.column : firstColumnId
-      if (target === undefined) continue
-      buckets.get(target)!.push(task)
-    }
-    // Newest tiles first within each column (a freshly created task lands on top).
-    const recency = (t: KanbanTask) => t.createdAt ?? t.lastMessageAt ?? 0
-    for (const list of buckets.values()) list.sort((a, b) => recency(b) - recency(a))
-    return buckets
-  }, [tasks, columns, firstColumnId])
+  // 分桶逻辑抽到 status-column.ts 与容器共享——选择区间序必须与渲染序同构。
+  const tasksByColumn = React.useMemo(() => bucketTasksByColumn(tasks, columns), [tasks, columns])
+
+  const selectionActive = (selectedIds?.size ?? 0) > 0
 
   const columnColors = useKanbanColumnColors()
 
@@ -174,6 +172,10 @@ export function KanbanBoard({
             subtaskModelGroups={subtaskModelGroups}
             defaultSubtaskModel={defaultSubtaskModel}
             onCreateTask={index === 0 ? onCreateTask : undefined}
+            selectedIds={selectedIds}
+            selectionActive={selectionActive}
+            onTileSelect={onTileSelect}
+            onSelectTasks={onSelectTasks}
             dropStatusId={column.dropStatusId ?? columnDropStatus?.[column.id]}
             onSelectDropStatus={
               onSelectDropStatus ? statusId => onSelectDropStatus(column.id, statusId) : undefined
