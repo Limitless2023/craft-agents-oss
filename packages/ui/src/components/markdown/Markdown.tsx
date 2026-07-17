@@ -298,7 +298,7 @@ function createComponents(
           }
           // 交互可视化块 → 沙箱 iframe（allow-scripts，断网，主题跟随）
           if (match?.[1] === 'viz' && isPreviewEnabled('viz')) {
-            return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" />, props.node?.position)
+            return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} />, props.node?.position)
           }
           // PDF preview blocks → inline first page with expand to full viewer
           if (match?.[1] === 'pdf-preview' && isPreviewEnabled('pdf-preview')) {
@@ -440,7 +440,7 @@ function createComponents(
         }
         // 交互可视化块 → 沙箱 iframe（allow-scripts，断网，主题跟随）
         if (match?.[1] === 'viz' && isPreviewEnabled('viz')) {
-          return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" />, props.node?.position)
+          return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} />, props.node?.position)
         }
         // PDF preview blocks → inline first page with expand to full viewer
         if (match?.[1] === 'pdf-preview' && isPreviewEnabled('pdf-preview')) {

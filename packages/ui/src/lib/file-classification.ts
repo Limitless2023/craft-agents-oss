@@ -7,7 +7,7 @@
  */
 
 /** Preview types that map to specific overlay components */
-export type FilePreviewType = 'image' | 'code' | 'markdown' | 'json' | 'text' | 'pdf'
+export type FilePreviewType = 'image' | 'code' | 'markdown' | 'json' | 'text' | 'pdf' | 'viz'
 
 export interface FileClassification {
   /** The preview type, or null if no in-app preview is available */
@@ -112,12 +112,24 @@ function getExtension(filePath: string): string {
 }
 
 /**
+ * 交互可视化产物路径：`.craft/visualizations/` 下的 .html。
+ * 这是唯一按"路径"而非"扩展名"分类的规则——同为 .html，住在可视化目录里的
+ * 走活组件渲染（VizPreviewOverlay），其余仍进代码查看器。
+ */
+export function isVizFilePath(filePath: string): boolean {
+  return /\/\.craft\/visualizations\/[^/]+\.html?$/i.test(filePath)
+}
+
+/**
  * Classify a file path by extension to determine preview capability.
  *
  * Priority order when an extension matches multiple sets (e.g. svg):
  * image > code > markdown > json > text > pdf
  */
 export function classifyFile(filePath: string): FileClassification {
+  // 路径规则优先于扩展名规则（viz 文件本质也是 .html/code）
+  if (isVizFilePath(filePath)) return { type: 'viz', canPreview: true }
+
   const ext = getExtension(filePath)
   if (!ext) return { type: null, canPreview: false }
 

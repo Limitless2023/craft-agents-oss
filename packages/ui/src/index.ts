@@ -192,6 +192,7 @@ export {
   FullscreenOverlayBase,
   FullscreenOverlayBaseHeader,
   PreviewOverlay,
+  VizPreviewOverlay,
   ContentFrame,
   CopyButton,
   type FullscreenOverlayBaseProps,

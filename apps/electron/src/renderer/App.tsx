@@ -72,6 +72,7 @@ import {
   ImagePreviewOverlay,
   PDFPreviewOverlay,
   CodePreviewOverlay,
+  VizPreviewOverlay,
   DocumentFormattedMarkdownOverlay,
   JSONPreviewOverlay,
 } from '@craft-agent/ui'
@@ -2320,6 +2321,20 @@ function FilePreviewRenderer({
           mode="read"
           theme={theme}
           error={state.error}
+        />
+      )
+
+    // 交互可视化：全屏活组件（渲染引擎与消息内 viz 块同源），头部带"导出独立 HTML"
+    case 'viz':
+      return (
+        <VizPreviewOverlay
+          isOpen
+          onClose={onClose}
+          filePath={state.filePath}
+          theme={theme}
+          loadHtml={(path) => window.electronAPI.readFile(path)}
+          onExportFile={(path, content) => window.electronAPI.writeFile(path, content)}
+          onRevealFile={(path) => { void window.electronAPI.showInFolder(path) }}
         />
       )
 

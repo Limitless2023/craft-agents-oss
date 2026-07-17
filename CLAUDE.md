@@ -160,11 +160,17 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 安全红线（收紧于参考实现）：iframe `sandbox="allow-scripts"`（**绝不**加 allow-same-origin——与 MarkdownHtmlBlock 恰相反，后者 same-origin 无脚本，**两组件刻意分离不合并**）；CSP 无任何网络源（比 spec 更严：删掉 CDN 白名单，堵"经 CDN URL 查询串外带"通道）；postMessage 双向校验 source 标识（S7）。红线有测试静态守护（`__tests__/viz-host.test.ts`，12 用例）。G8 追问回传留二期：桥保留 `window.openai/craft.sendFollowUpMessage` API 面，宿主统一回执 unsupported。
 
-**New files:** `packages/ui/src/components/markdown/{viz-host.ts, viz-assets.ts(生成物，源=resources/skills/visualize/assets/visualize.css), MarkdownVizBlock.tsx, __tests__/viz-host.test.ts}`、`resources/skills/visualize/{SKILL.md, assets/visualize.css}`
+**二期扩展（2026-07-17 当天）——文件入口 + 导出**：viz 文件成为"可打开的资产"：
+- **全屏活组件 overlay**：`classifyFile` 加了唯一一条**按路径**（非扩展名）的分类规则——`.craft/visualizations/*.html` → `'viz'` 类型 → 链接拦截器路由到 `VizPreviewOverlay`（PreviewOverlay 外壳 + 同一套 `buildVizDocument`/桥）。普通 .html 仍进代码查看器。消息内 viz 块 hover ⤢ → `onFileClick` 走同一管线。
+- **导出独立 HTML**：overlay 头部 Download 按钮 → `buildStandaloneVizDocument`（主题按导出时快照**烘焙**、无桥脚本、同一份断网 CSP）写 `<原名>-standalone.html` 到源文件旁（复用我们的 `file:write` IPC）→ Finder 自动显示。浏览器直接可开、可分享。
+- **文件树白名单**：会话文件树的点目录过滤对 `.craft` 开例外（`server-core/files.ts`，**main 进程改动**）。
+- 桥逻辑抽成 `use-viz-bridge.ts` 供消息块与 overlay 共用（主题推送/resize 接收/S7 校验/follow-up 回执单一实现）。
 
-**Modified files:** `packages/ui/src/components/markdown/Markdown.tsx`（'viz' 入 DisablablePreviewBlock + minimal/full 两处路由）、7× i18n（`viz.*` 6 键）。
+**New files:** `packages/ui/src/components/markdown/{viz-host.ts, viz-assets.ts(生成物，源=resources/skills/visualize/assets/visualize.css), MarkdownVizBlock.tsx, use-viz-bridge.ts, __tests__/viz-host.test.ts}`、`packages/ui/src/components/overlay/VizPreviewOverlay.tsx`、`resources/skills/visualize/{SKILL.md, assets/visualize.css}`
 
-**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`；技能变更另需重拷 `~/.agents/skills/visualize/`。
+**Modified files:** `packages/ui/src/components/markdown/Markdown.tsx`（'viz' 入 DisablablePreviewBlock + minimal/full 两处路由）、`packages/ui/src/lib/file-classification.ts`（`isVizFilePath` 路径规则 + 'viz' 类型）、`packages/ui/src/{index.ts, components/overlay/index.ts}`（导出）、`apps/electron/src/renderer/hooks/useLinkInterceptor.ts`（VizPreview 状态 + 路由）、`apps/electron/src/renderer/App.tsx`（case 'viz' 渲染 + read/write/reveal 接线）、`packages/server-core/src/handlers/rpc/files.ts`（`.craft` 白名单）、7× i18n（`viz.*` 9 键）。
+
+**Patching:** ⚠ 自二期起**非 renderer-only**（files.ts 进 main.cjs）→ `build:renderer` + `build:main` + `build:preload` + `bash patch-app.sh`；技能变更另需重拷 `~/.agents/skills/visualize/`。
 
 ## Patching the Official App
 

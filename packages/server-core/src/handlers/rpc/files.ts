@@ -499,8 +499,10 @@ export function registerFilesHandlers(server: RpcServer, deps: HandlerDeps): voi
             if (results.length >= MAX_RESULTS) break
 
             const name = entry.name
-            // Skip hidden files/dirs and ignored directories
-            if (name.startsWith('.') || SKIP_DIRS.has(name)) continue
+            // Skip hidden files/dirs and ignored directories.
+            // 例外：.craft（可视化等会话产物目录）——它是用户可打开的资产，
+            // 不该被点目录规则藏掉（配套渲染：renderer 的 VizPreviewOverlay）。
+            if ((name.startsWith('.') && name !== '.craft') || SKIP_DIRS.has(name)) continue
 
             const relativePath = relDir ? `${relDir}/${name}` : name
             const isDir = entry.isDirectory()

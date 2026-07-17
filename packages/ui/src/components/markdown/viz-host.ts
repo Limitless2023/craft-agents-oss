@@ -276,3 +276,23 @@ export function buildVizDocument(fragment: string, theme: VizThemeSnapshot): str
 
   return `<!doctype html><html data-theme="${theme.mode}"><head>${head}</head><body>${fragment}${scripts}</body></html>`
 }
+
+/**
+ * 导出用：片段 → 可独立在浏览器打开的自包含文档（方案 2）。
+ * 与宿主文档的差异：无桥脚本（没有宿主可通信），主题按导出时快照**烘焙**进文档
+ * （离开应用后不再跟随），补 charset/viewport/title。CSP 保持同一份——独立文件
+ * 被分享出去后依然断网，行为可预期。
+ */
+export function buildStandaloneVizDocument(fragment: string, theme: VizThemeSnapshot, title: string): string {
+  const themeVars = Object.entries(theme.tokens)
+    .map(([name, value]) => `--${name}: ${value};`)
+    .join(' ')
+  const head = [
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    `<meta http-equiv="Content-Security-Policy" content="${VIZ_CSP}">`,
+    `<title>${title.replace(/</g, '&lt;')}</title>`,
+    `<style>${VIZ_BASE_CSS}\n:root { ${themeVars} }\nbody { margin: 24px auto; max-width: 960px; padding: 0 16px; background: var(--background, #fff); }</style>`,
+  ].join('')
+  return `<!doctype html><html data-theme="${theme.mode}"><head>${head}</head><body>${fragment}</body></html>`
+}

@@ -70,6 +70,12 @@ interface TextPreview {
   error?: string
 }
 
+/** 交互可视化（.craft/visualizations/*.html）——内容由 VizPreviewOverlay 自读自渲。 */
+interface VizPreview {
+  type: 'viz'
+  filePath: string
+}
+
 export type FilePreviewState =
   | ImagePreview
   | PDFPreview
@@ -77,6 +83,7 @@ export type FilePreviewState =
   | MarkdownPreview
   | JSONPreview
   | TextPreview
+  | VizPreview
 
 // ── Hook options ───────────────────────────────────────────────────────────────
 // Callbacks injected by App.tsx so the hook doesn't depend on window.electronAPI directly.
@@ -221,6 +228,13 @@ export function useLinkInterceptor(options: LinkInterceptorOptions): LinkInterce
 
     // Images: show in-app preview overlay
     if (type === 'image') {
+      setPreviewState({ type, filePath: resolvedPath })
+      return
+    }
+
+    // 交互可视化：VizPreviewOverlay 自己读文件（与消息内 viz 块同一套加载/错误态），
+    // 这里只递路径，不走下面 text 系的"先读后开"流程
+    if (type === 'viz') {
       setPreviewState({ type, filePath: resolvedPath })
       return
     }
