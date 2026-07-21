@@ -33,7 +33,7 @@ import {
   isAutomationsNavigation,
   isProjectsNavigation,
 } from '@/contexts/NavigationContext'
-import { isFavoritesNavigation } from '../../../shared/types'
+import { isFavoritesNavigation, isVizGalleryNavigation } from '../../../shared/types'
 import { useSessionSelection, useIsMultiSelectActive, useSelectedIds, useSelectionCount } from '@/hooks/useSession'
 import { sourceSelection, skillSelection, automationSelection } from '@/hooks/useEntitySelection'
 import { extractLabelId } from '@craft-agent/shared/labels'
@@ -42,6 +42,7 @@ import { SourceInfoPage, ChatPage } from '@/pages'
 import SkillInfoPage from '@/pages/SkillInfoPage'
 import { getSettingsPageComponent } from '@/pages/settings/settings-pages'
 import FavoritesPage from '../favorites/FavoritesPage'
+import { VizGalleryPage } from '../viz-gallery/VizGalleryPage'
 import { AutomationInfoPage } from '../automations/AutomationInfoPage'
 import ProjectInfoPage from '@/pages/ProjectInfoPage'
 import { KanbanBoardContainer } from './kanban/KanbanBoardContainer'
@@ -234,6 +235,15 @@ export function MainContentPanel({
       />
     </StoplightProvider>
   )
+
+  // Viz gallery navigator - navigator-only full-page view.
+  if (isVizGalleryNavigation(navState)) {
+    return wrapWithStoplight(
+      <Panel variant="grow" className={className}>
+        <VizGalleryPage />
+      </Panel>
+    )
+  }
 
   // Favorites navigator - navigator-only full-page view.
   if (isFavoritesNavigation(navState)) {

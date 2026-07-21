@@ -36,5 +36,8 @@ export function isDetailNavState(navState: NavigationState | null): boolean {
     case 'favorites':
       // 收藏夹是全幅内容页（无中间导航列），compact 模式应滑入内容面板
       return true
+    case 'viz-gallery':
+      // 可视化画廊同款全幅内容页
+      return true
   }
 }

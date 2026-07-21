@@ -919,6 +919,14 @@ export interface FavoritesNavigationState {
 }
 
 /**
+ * Viz gallery navigation state（可视化资产画廊，navigator-only view）
+ */
+export interface VizGalleryNavigationState {
+  navigator: 'viz-gallery'
+  rightSidebar?: RightSidebarPanel
+}
+
+/**
  * Projects navigation state
  */
 export interface ProjectsNavigationState {
@@ -937,6 +945,7 @@ export type NavigationState =
   | SkillsNavigationState
   | AutomationsNavigationState
   | FavoritesNavigationState
+  | VizGalleryNavigationState
   | ProjectsNavigationState
 
 export const isSessionsNavigation = (
@@ -962,6 +971,10 @@ export const isAutomationsNavigation = (
 export const isFavoritesNavigation = (
   state: NavigationState
 ): state is FavoritesNavigationState => state.navigator === 'favorites'
+
+export const isVizGalleryNavigation = (
+  state: NavigationState
+): state is VizGalleryNavigationState => state.navigator === 'viz-gallery'
 
 export const isProjectsNavigation = (
   state: NavigationState
@@ -1004,6 +1017,9 @@ export const getNavigationStateKey = (state: NavigationState): string => {
   }
   if (state.navigator === 'favorites') {
     return 'favorites'
+  }
+  if (state.navigator === 'viz-gallery') {
+    return 'viz-gallery'
   }
   // Chats
   const f = state.filter
@@ -1070,6 +1086,9 @@ export const parseNavigationStateKey = (key: string): NavigationState | null => 
 
   // Handle favorites
   if (key === 'favorites') return { navigator: 'favorites' }
+
+  // Handle viz gallery
+  if (key === 'viz-gallery') return { navigator: 'viz-gallery' }
 
   // Handle sessions
   const parseSessionsKey = (filterKey: string, sessionId?: string): NavigationState | null => {

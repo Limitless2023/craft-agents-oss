@@ -35,6 +35,7 @@ import {
   FileText as PreviewIcon,
   MailOpen,
   Heart,
+  SlidersHorizontal,
   FolderKanban,
 } from "lucide-react"
 // SessionStatusIcons no longer used - icons come from dynamic sessionStatuses
@@ -128,7 +129,7 @@ import {
   isProjectsNavigation,
   type NavigationState,
 } from "@/contexts/NavigationContext"
-import { isFavoritesNavigation } from "../../../shared/types"
+import { isFavoritesNavigation, isVizGalleryNavigation } from "../../../shared/types"
 import type { SettingsSubpage } from "../../../shared/types"
 import { SourcesListPanel } from "./SourcesListPanel"
 import { SkillsListPanel } from "./SkillsListPanel"
@@ -628,7 +629,7 @@ function AppShellContent({
   // ── 三层可见度 ──────────────────────────────────────────────────────────
   // 用户偏好层：想不想显示（紧凑/focus 模式下直接为 false）
   const sidebarShownByPref = !effectiveSidebarAndNavigatorHidden && isSidebarVisible
-  const navShownByPref = !isFavoritesNavigation(navState) && !effectiveSidebarAndNavigatorHidden
+  const navShownByPref = !isFavoritesNavigation(navState) && !isVizGalleryNavigation(navState) && !effectiveSidebarAndNavigatorHidden
 
   // 左侧占用阶梯（按"偏好布局"算，阈值不受实际收起状态反馈 → 无震荡）：
   // base = 边缘 inset + 与主内容的 gap；每列显示则追加 自身宽度 + gap。
@@ -2087,6 +2088,11 @@ function AppShellContent({
     navigate(routes.view.favorites())
   }, [])
 
+  // Handler for viz gallery view.
+  const handleVizGalleryClick = useCallback(() => {
+    navigate(routes.view.vizGallery())
+  }, [])
+
   // Handler for What's New overlay
   const handleWhatsNewClick = useCallback(async () => {
     const content = await window.electronAPI.getReleaseNotes()
@@ -2925,6 +2931,14 @@ function AppShellContent({
                       icon: Heart,
                       variant: isFavoritesNavigation(navState) ? "default" : "ghost",
                       onClick: () => handleFavoritesClick(),
+                    },
+                    // --- Viz gallery ---
+                    {
+                      id: "nav:viz-gallery",
+                      title: t("sidebar.vizGallery"),
+                      icon: SlidersHorizontal,
+                      variant: isVizGalleryNavigation(navState) ? "default" : "ghost",
+                      onClick: () => handleVizGalleryClick(),
                     },
                     // --- Settings ---
                     {
@@ -3852,7 +3866,7 @@ function AppShellContent({
             )}
             </div>
           }
-          navigatorWidth={isFavoritesNavigation(navState) ? 0 : (isAutoCompact ? sessionListWidth : (!navShownEffective || isBoardView ? 0 : sessionListWidth))}
+          navigatorWidth={isFavoritesNavigation(navState) || isVizGalleryNavigation(navState) ? 0 : (isAutoCompact ? sessionListWidth : (!navShownEffective || isBoardView ? 0 : sessionListWidth))}
           isSidebarAndNavigatorHidden={effectiveSidebarAndNavigatorHidden}
           isRightSidebarVisible={isRightSidebarOpen}
           isCompact={isAutoCompact}

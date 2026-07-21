@@ -173,6 +173,12 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **Patching:** ⚠ 自二期起**非 renderer-only**（files.ts 进 main.cjs）→ `build:renderer` + `build:main` + `build:preload` + `bash patch-app.sh`；技能变更另需重拷 `~/.agents/skills/visualize/`。
 
+### Viz Gallery — 可视化资产画廊（侧边栏 · 活缩略图网格）
+
+侧边栏 "可视化" 入口（Favorites 下方）→ 全幅画廊页：扫描 workspace 根 + 各会话 workingDirectory 下的 `.craft/visualizations/*.html`（排除 `-standalone` 导出副本），活缩略图网格（半尺寸沙箱 iframe，pointer-events 关、不接主题桥、上限 60），点卡片经 `AppShellContext.onOpenFile` → VizPreviewOverlay 全屏。扫描用现成 `fs:listFiles`（零新 IPC）。导航注册是 Favorites 的孪生（`viz-gallery` navigator，8 处：types/routes/route-parser/nav-helpers/AppShell×3/MainContentPanel）。
+
+**New files:** `renderer/components/viz-gallery/{VizGalleryPage.tsx, viz-gallery-core.ts(+test), CLAUDE.md(L2)}`；`packages/ui/index.ts` 补导出 viz-host 原语（buildVizDocument/readVizTheme/VIZ_IFRAME_SANDBOX/VIZ_MAX_FILE_BYTES）+ `isVizFilePath`。
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

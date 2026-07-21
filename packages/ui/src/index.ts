@@ -235,9 +235,18 @@ export {
 export {
   classifyFile,
   shouldRevealInFinder,
+  isVizFilePath,
   type FilePreviewType,
   type FileClassification,
 } from './lib/file-classification'
+
+// Viz runtime primitives (for renderer-side viz consumers, e.g. the gallery page)
+export {
+  buildVizDocument,
+  readVizTheme,
+  VIZ_IFRAME_SANDBOX,
+  VIZ_MAX_FILE_BYTES,
+} from './components/markdown/viz-host'
 
 // Utilities
 export { cn } from './lib/utils'

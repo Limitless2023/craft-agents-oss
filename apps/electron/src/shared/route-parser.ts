@@ -35,7 +35,7 @@ export interface ParsedRoute {
 // Compound Route Types (new format)
 // =============================================================================
 
-export type NavigatorType = 'sessions' | 'sources' | 'skills' | 'automations' | 'projects' | 'settings' | 'favorites'
+export type NavigatorType = 'sessions' | 'sources' | 'skills' | 'automations' | 'projects' | 'settings' | 'favorites' | 'viz-gallery'
 
 export interface ParsedCompoundRoute {
   /** The navigator type */
@@ -63,7 +63,7 @@ export interface ParsedCompoundRoute {
  * Known prefixes that indicate a compound route
  */
 const COMPOUND_ROUTE_PREFIXES = [
-  'allSessions', 'flagged', 'archived', 'state', 'label', 'view', 'board', 'sources', 'skills', 'automations', 'projects', 'settings', 'favorites'
+  'allSessions', 'flagged', 'archived', 'state', 'label', 'view', 'board', 'sources', 'skills', 'automations', 'projects', 'settings', 'favorites', 'viz-gallery'
 ]
 
 /**
@@ -102,6 +102,11 @@ export function parseCompoundRoute(route: string): ParsedCompoundRoute | null {
   // Favorites navigator (navigator-only view, no details)
   if (first === 'favorites') {
     return { navigator: 'favorites', details: null }
+  }
+
+  // Viz gallery navigator (navigator-only view, no details)
+  if (first === 'viz-gallery') {
+    return { navigator: 'viz-gallery', details: null }
   }
 
   // Kanban board — standalone route. A view of all sessions in board mode.
@@ -299,6 +304,10 @@ export function buildCompoundRoute(parsed: ParsedCompoundRoute): string {
     return 'favorites'
   }
 
+  if (parsed.navigator === 'viz-gallery') {
+    return 'viz-gallery'
+  }
+
   if (parsed.navigator === 'settings') {
     if (!parsed.details) return 'settings'
     return `settings/${parsed.details.type}`
@@ -432,6 +441,11 @@ function convertCompoundToViewRoute(compound: ParsedCompoundRoute): ParsedRoute 
     return { type: 'view', name: 'favorites', params: {} }
   }
 
+  // Viz gallery (navigator-only view)
+  if (compound.navigator === 'viz-gallery') {
+    return { type: 'view', name: 'viz-gallery', params: {} }
+  }
+
   // Settings
   if (compound.navigator === 'settings') {
     const subpage = compound.details?.type || 'app'
@@ -560,6 +574,11 @@ function convertCompoundToNavigationState(compound: ParsedCompoundRoute): Naviga
   // Favorites (navigator-only view)
   if (compound.navigator === 'favorites') {
     return { navigator: 'favorites' }
+  }
+
+  // Viz gallery (navigator-only view)
+  if (compound.navigator === 'viz-gallery') {
+    return { navigator: 'viz-gallery' }
   }
 
   // Settings
@@ -789,6 +808,10 @@ function convertParsedRouteToNavigationState(parsed: ParsedRoute): NavigationSta
 function navigationStateToCompoundRoute(state: NavigationState): ParsedCompoundRoute {
   if (state.navigator === 'favorites') {
     return { navigator: 'favorites', details: null }
+  }
+
+  if (state.navigator === 'viz-gallery') {
+    return { navigator: 'viz-gallery', details: null }
   }
 
   if (state.navigator === 'settings') {

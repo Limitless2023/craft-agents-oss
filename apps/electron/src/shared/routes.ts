@@ -187,6 +187,9 @@ export const routes = {
     /** Favorites view (favorites navigator) */
     favorites: () => 'favorites' as const,
 
+    /** Viz gallery view (viz-gallery navigator) */
+    vizGallery: () => 'viz-gallery' as const,
+
     /** Projects view (projects navigator) */
     projects: (projectSlug?: string) =>
       projectSlug
