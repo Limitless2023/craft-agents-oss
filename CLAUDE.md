@@ -179,6 +179,14 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **New files:** `renderer/components/viz-gallery/{VizGalleryPage.tsx, viz-gallery-core.ts(+test), CLAUDE.md(L2)}`；`packages/ui/index.ts` 补导出 viz-host 原语（buildVizDocument/readVizTheme/VIZ_IFRAME_SANDBOX/VIZ_MAX_FILE_BYTES）+ `isVizFilePath`。
 
+### Session Export — 会话导出为 Markdown（含活组件）
+
+聊天页标题下拉菜单 "导出为 Markdown"：只序列化用户提问 + 助手最终回复正文（工具步骤折叠成一行计数；刻意不用上游 `formatTurnAsMarkdown`——那是带 JSON dump 的调试视图），写 `<cwd>/.craft/exports/<标题>-<时间戳>.md` 后**立即 dock 进 Preview 面板**。关键组合价值：文档里的 viz fence 在 Preview 渲染时**仍是活的交互组件**（同一 Markdown 管线）。仅聊天页头部菜单显示此项（列表菜单不加载消息，`onExportMarkdown` 可选 prop 缺省即隐藏）。**`file:write` 顺带补了 mkdir -p 父目录**（validateFilePath 校验后，信任边界内；main 进程改动）。
+
+**New files:** `renderer/lib/session-markdown.ts`（buildSessionMarkdown / sessionExportFileName）
+
+**Modified files:** `SessionMenu.tsx`（onExportMarkdown 可选项）、`pages/ChatPage.tsx`（handler + dock 接线）、`server-core/handlers/rpc/files.ts`（WRITE mkdir）。
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

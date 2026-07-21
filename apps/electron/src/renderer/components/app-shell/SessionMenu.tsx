@@ -34,6 +34,7 @@ import {
   PinOff,
   FolderKanban,
   Check,
+  Download,
 } from 'lucide-react'
 import { useMenuComponents } from '@/components/ui/menu-context'
 import { getStateColor, getStateIcon, type SessionStatusId } from '@/config/session-status-config'
@@ -82,6 +83,8 @@ export interface SessionMenuProps {
   onTogglePin?: () => void
   /** Whether this session is currently pinned (drives label + icon) */
   isPinned?: boolean
+  /** 导出会话为 Markdown。仅聊天页头部传入（列表菜单不加载消息，不显示此项）。 */
+  onExportMarkdown?: () => void
 }
 
 /**
@@ -108,6 +111,7 @@ export function SessionMenu({
   isPinned,
   projects = [],
   onSetProjectId,
+  onExportMarkdown,
 }: SessionMenuProps) {
   const { t } = useTranslation()
 
@@ -328,6 +332,14 @@ export function SessionMenu({
         <Copy className="h-3.5 w-3.5" />
         <span className="flex-1">{t("sessionMenu.copyPath")}</span>
       </MenuItem>
+
+      {/* 导出会话为 Markdown（写 .craft/exports/ 并 dock 进 Preview 面板） */}
+      {onExportMarkdown && (
+        <MenuItem onClick={onExportMarkdown}>
+          <Download className="h-3.5 w-3.5" />
+          <span className="flex-1">{t("sessionMenu.exportMarkdown")}</span>
+        </MenuItem>
+      )}
 
       <Separator />
 

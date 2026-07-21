@@ -26,6 +26,9 @@ import { coerceInputText } from '@/lib/input-text'
 import { deriveSessionMessagesLoadState, formatSessionLoadFailure } from '@/lib/session-load'
 import { ensureSessionMessagesLoadedAtom, forceSessionMessagesReloadAtom, loadedSessionsAtom, sessionMetaMapAtom } from '@/atoms/sessions'
 import { kanbanEditorTargetAtom } from '@/atoms/kanban'
+import { sidebarDocsAtomFamily, openSidebarDocTab } from '@/atoms/sidebar-docs'
+import { useNavigation } from '@/contexts/NavigationContext'
+import { buildSessionMarkdown, sessionExportFileName } from '@/lib/session-markdown'
 import { getSessionTitle } from '@/utils/session'
 // Model resolution: connection.defaultModel (no hardcoded defaults)
 import { resolveEffectiveConnectionSlug, isSessionConnectionUnavailable } from '@config/llm-connections'
@@ -496,6 +499,32 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
     }
   }, [sessionId])
 
+  // ── 导出会话为 Markdown：写 <cwd>/.craft/exports/ 并立即 dock 进 Preview 面板 ──
+  // 导出文档里的 viz fence 在 Preview 渲染时仍是活组件（同一 Markdown 管线）。
+  const { updateRightSidebar } = useNavigation()
+  const setSidebarDocs = useSetAtom(sidebarDocsAtomFamily(sessionId))
+  const handleExportMarkdown = React.useCallback(async () => {
+    if (!session || !sessionMeta) return
+    const baseDir = workingDirectory || activeWorkspace?.rootPath
+    if (!baseDir) return
+    const title = getSessionTitle(sessionMeta)
+    const md = buildSessionMarkdown(title, session.messages, {
+      user: t('export.roleUser'),
+      assistant: t('export.roleAssistant'),
+      exportedFrom: t('export.exportedFrom'),
+      activitiesOmitted: (count) => t('export.activitiesOmitted', { count }),
+    })
+    const path = `${baseDir}/.craft/exports/${sessionExportFileName(title)}`
+    try {
+      await window.electronAPI.writeFile(path, md)
+      setSidebarDocs((prev) => openSidebarDocTab(prev, path))
+      updateRightSidebar({ type: 'preview' })
+      toast.success(t('sessionMenu.exportedMarkdown'))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    }
+  }, [session, sessionMeta, workingDirectory, activeWorkspace, t, setSidebarDocs, updateRightSidebar])
+
   // Share action handlers
   const handleShare = React.useCallback(async () => {
     const result = await window.electronAPI.sessionCommand(sessionId, { type: 'shareToViewer' }) as { success: boolean; url?: string; error?: string } | undefined
@@ -659,6 +688,7 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
       onSessionStatusChange={handleSessionStatusChange}
       onOpenInNewWindow={handleOpenInNewWindow}
       onDelete={handleDelete}
+      onExportMarkdown={handleExportMarkdown}
     />
   ) : null, [
     sessionMeta,
@@ -675,6 +705,7 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
     handleSessionStatusChange,
     handleOpenInNewWindow,
     handleDelete,
+    handleExportMarkdown,
   ])
 
   const compactTitleMenu = React.useMemo(() => (sessionMeta && isCompactMode) ? (

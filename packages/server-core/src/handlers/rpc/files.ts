@@ -58,6 +58,9 @@ export function registerFilesHandlers(server: RpcServer, deps: HandlerDeps): voi
     try {
       const workspaceId = ctx.workspaceId ?? deps.windowManager?.getWorkspaceForWindow(ctx.webContentsId!)
       const safePath = await validateFilePath(path, getWorkspaceAllowedDirs(workspaceId))
+      // 父目录随写自建（路径已过允许目录校验，mkdir 不出信任边界）——
+      // 会话导出等场景写 .craft/exports/ 这类首次出现的目录
+      await mkdir(dirname(safePath), { recursive: true })
       await writeFile(safePath, content, 'utf-8')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
