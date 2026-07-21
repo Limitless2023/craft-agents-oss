@@ -211,6 +211,8 @@ export interface FreeFormInputProps {
     inputTokens?: number
     /** Model's context window size in tokens */
     contextWindow?: number
+    /** 本会话累计费用（美元）——SessionMeta.tokenUsage.costUsd 透传 */
+    costUsd?: number
   }
   /** Follow-up annotations shown as context chips above the input */
   followUpItems?: FollowUpInputItem[]
@@ -2446,6 +2448,11 @@ export function FreeFormInput({
                           <Spinner className="h-3 w-3" />
                         )}
                         {t('chat.tokensUsed', { displayCount: formatTokenCount(contextStatus.inputTokens) })}
+                        {contextStatus.costUsd != null && contextStatus.costUsd > 0 && (
+                          <span className="tabular-nums text-muted-foreground/80">
+                            · ${contextStatus.costUsd >= 0.1 ? contextStatus.costUsd.toFixed(2) : contextStatus.costUsd.toFixed(3)}
+                          </span>
+                        )}
                       </span>
                     </div>
                   </div>

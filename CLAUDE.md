@@ -187,6 +187,14 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **Modified files:** `SessionMenu.tsx`（onExportMarkdown 可选项）、`pages/ChatPage.tsx`（handler + dock 接线）、`server-core/handlers/rpc/files.ts`（WRITE mkdir）。
 
+### Session Cost — 会话费用显性化
+
+模型下拉的 context 页脚（token 计数旁）追加 `· $x.xx`（≥$0.1 两位小数，否则三位）。数据链：`session.tokenUsage.costUsd`（一直存在，此前仅 Kanban 卡片脚注消费）→ ChatDisplay `contextStatus` 透传 → FreeFormInput 渲染。
+
+**Modified files:** `ChatDisplay.tsx`（contextStatus.costUsd 透传）、`input/FreeFormInput.tsx`（类型 + 渲染）。
+
+**Patching（三 feature 合并）:** files.ts 动 main → `build:renderer` + `build:main` + `build:preload` + `bash patch-app.sh`。i18n 新增 14 键 ×7（sidebar.vizGallery / vizGallery.* / sessionMenu.export* / export.*）。
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.
