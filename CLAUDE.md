@@ -195,6 +195,14 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **Patching（三 feature 合并）:** files.ts 动 main → `build:renderer` + `build:main` + `build:preload` + `bash patch-app.sh`。i18n 新增 14 键 ×7（sidebar.vizGallery / vizGallery.* / sessionMenu.export* / export.*）。
 
+### User Message Copy — 用户消息一键复制
+
+用户消息气泡**下方右对齐**的悬停复制按钮（微信/ChatGPT 惯例：视线和手停在右下；初版放过左缘，被用户否掉——工程省事不敌使用直觉）。hover 整条消息显形（`group/user-msg` 在外层容器，`-mt-2` 贴近气泡）；复制**可见正文** `displayContent`（已剥离 edit_request 隐藏段，不带内部标记）；Copy→Check 2s 视觉与助手回复页脚同款；空正文（纯附件消息）不显示按钮。i18n 复用现成 `common.copy/copied`，零新键。
+
+**Modified files:** `packages/ui/src/components/chat/UserMessageBubble.tsx`（唯一改动）。
+
+**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

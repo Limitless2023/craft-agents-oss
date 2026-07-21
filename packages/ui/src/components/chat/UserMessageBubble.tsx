@@ -9,10 +9,11 @@
  * - Optional file attachments with thumbnails
  * - Content badges for @mentions (sources, skills)
  * - Pending/queued states (Electron only)
+ * - Hover-revealed copy button (copies the visible message text)
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Clock } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Check, Clock, Copy } from 'lucide-react'
 import type { StoredAttachment, ContentBadge } from '@craft-agent/core'
 import { normalizePath } from '@craft-agent/core/utils'
 import { cn } from '../../lib/utils'
@@ -390,6 +391,15 @@ export function UserMessageBubble({
     }, remaining)
   }, [isQueued])
 
+  // 复制状态：与助手回复页脚的 Copy→Check 同一套视觉语言（2s 后还原）
+  const [copied, setCopied] = useState(false)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+    }
+  }, [])
+
   // Separate edit_request badges (rendered above bubble) from other badges (rendered inline)
   const editRequestBadges = badges?.filter(isEditRequestBadge) ?? []
   const inlineBadges = badges?.filter(b => !isEditRequestBadge(b)) ?? []
@@ -409,8 +419,23 @@ export function UserMessageBubble({
     displayContent = displayContent.trim()
   }
 
+  // 复制"可见的消息正文"（displayContent，已剥离 edit_request 隐藏段）——
+  // 用户想要的是自己看到并发出的那段话，不是内部标记
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(displayContent)
+      setCopied(true)
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }, [displayContent])
+
+  const showCopyButton = displayContent.trim().length > 0
+
   return (
-    <div className={cn("flex flex-col items-end gap-3 w-full", className)}>
+    <div className={cn("group/user-msg flex flex-col items-end gap-3 w-full", className)}>
       {/* Attachment preview row - stored attachments with thumbnails */}
       {hasAttachments && (
         <div className="flex gap-2 justify-end max-w-[80%] flex-wrap">
@@ -514,6 +539,28 @@ export function UserMessageBubble({
           )
         }
       </div>
+
+      {/* 气泡下方右对齐的悬停操作行（微信/ChatGPT 惯例：视线和手都停在右下）。
+          -mt-2 抵消父容器 gap-3 的一部分，让按钮行贴近气泡；hover 作用域为
+          整条消息（group/user-msg 在外层容器），空正文（纯附件）不渲染 */}
+      {showCopyButton && (
+        <div className="-mt-2 flex justify-end pr-1">
+          <button
+            type="button"
+            onClick={() => void handleCopy()}
+            title={t(copied ? 'common.copied' : 'common.copy')}
+            aria-label={t(copied ? 'common.copied' : 'common.copy')}
+            className={cn(
+              'grid h-6 w-6 place-items-center rounded-md transition-[color,opacity] select-none',
+              'opacity-0 group-hover/user-msg:opacity-100 focus-visible:opacity-100',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+              copied ? 'text-success opacity-100' : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05]'
+            )}
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
