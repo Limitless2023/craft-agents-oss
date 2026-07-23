@@ -63,7 +63,7 @@ export interface SessionMenuProps {
   /** Callback when labels are toggled (receives full updated labels array) */
   onLabelsChange?: (labels: string[]) => void
   /** Whether multiple workspaces exist (enables "Send to Workspace" item) */
-  hasRemoteWorkspaces?: boolean
+  hasTransferTargets?: boolean
   /** Workspace projects (omit to hide the submenu) */
   projects?: SessionMenuProjectOption[]
   /** Callback for binding/unbinding the session to a project. `null` = unbind. */
@@ -106,7 +106,7 @@ export function SessionMenu({
   onOpenInNewWindow,
   onSendToWorkspace,
   onDelete,
-  hasRemoteWorkspaces,
+  hasTransferTargets,
   onTogglePin,
   isPinned,
   projects = [],
@@ -156,7 +156,7 @@ export function SessionMenu({
       )}
 
       {/* Send to Workspace — visible when at least one other workspace exists */}
-      {hasRemoteWorkspaces && onSendToWorkspace && (
+      {hasTransferTargets && onSendToWorkspace && (
         <MenuItem onClick={onSendToWorkspace}>
           <Send className="h-3.5 w-3.5" />
           <span className="flex-1">{t("sessionMenu.sendToWorkspace")}</span>
