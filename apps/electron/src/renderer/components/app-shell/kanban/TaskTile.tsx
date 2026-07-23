@@ -112,7 +112,8 @@ export function TaskTile({
   const { t } = useTranslation()
   const livePulseEnabled = useAtomValue(kanbanLivePulseAtom)
   const columnColors = useKanbanColumnColors()
-  const accent = columnColors.get(task.column)?.solid ?? 'var(--primary)'
+  // 宿主品牌色是 --accent（无 --primary），回退写错等于无回退
+  const accent = columnColors.get(task.column)?.solid ?? 'var(--accent)'
 
   const color = project?.color ?? null
   const showStripe = !!color
@@ -284,7 +285,8 @@ export function TaskTile({
                     className={cn('h-3 w-3 shrink-0 transition-transform', expanded && 'rotate-90')}
                     strokeWidth={2}
                   />
-                  <SubtaskProgress subtasks={task.subtasks} total={task.subtaskTotal} accent={accent} className="min-w-0 flex-1" />
+                  {/* 进度条走主题色（不跟列色）：列色是列头的身份标识，进度是全局语义 */}
+                  <SubtaskProgress subtasks={task.subtasks} total={task.subtaskTotal} className="min-w-0 flex-1" />
                 </button>
                 {onRunSubtasks && (
                   <button

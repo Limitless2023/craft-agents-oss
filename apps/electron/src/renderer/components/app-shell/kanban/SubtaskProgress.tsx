@@ -9,7 +9,7 @@ interface SubtaskProgressProps {
    * count and bar stay stable instead of growing as children appear.
    */
   total?: number
-  /** Accent color for done/running segments (the tile's column color). */
+  /** Accent color for done/running segments. Defaults to the theme accent. */
   accent?: string
   className?: string
 }
@@ -21,7 +21,9 @@ const PENDING_TRACK = 'color-mix(in srgb, currentColor 12%, transparent)'
  * ones pulse), pending segments stay a faint track. A trailing `done/total`
  * count gives the exact tally. Renders nothing when there are no subtasks.
  */
-export function SubtaskProgress({ subtasks, total: totalProp, accent = 'var(--primary)', className }: SubtaskProgressProps) {
+// 注意：宿主没有 --primary（品牌色叫 --accent，viz 主题桥修过同一个坑），
+// 默认值必须用 --accent，写 --primary 等于无回退
+export function SubtaskProgress({ subtasks, total: totalProp, accent = 'var(--accent)', className }: SubtaskProgressProps) {
   const revealed = subtasks.length
   // Never let the denominator drop below what's already revealed (guards a stale/low total).
   const total = Math.max(totalProp ?? revealed, revealed)
