@@ -158,7 +158,9 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 2. **复用 `file:read` IPC**：主进程 `validateFilePath` 已有允许根目录 + realpath 符号链接还原（S4）+ 敏感文件黑名单；2MB 上限（S5）与错误分类在前端补。**零新 IPC → renderer-only**。
 3. **技能装 `~/.agents/skills/visualize/`**（global 级=最低优先级，workspace/project 同名自然覆盖）：技能加载器无"内置 resources"概念，不新增机制。源文件在仓内 `resources/skills/visualize/`（SKILL.md 从 Codex 原版改写：fence 语法、**无 CDN 全内联**、无 lucide/tooltip 运行时、Maps 断网约束、删 Standalone/Sites），改后 `cp -r resources/skills/visualize ~/.agents/skills/` 重装。
 
-安全红线（收紧于参考实现）：iframe `sandbox="allow-scripts"`（**绝不**加 allow-same-origin——与 MarkdownHtmlBlock 恰相反，后者 same-origin 无脚本，**两组件刻意分离不合并**）；CSP 无任何网络源（比 spec 更严：删掉 CDN 白名单，堵"经 CDN URL 查询串外带"通道）；postMessage 双向校验 source 标识（S7）。红线有测试静态守护（`__tests__/viz-host.test.ts`，12 用例）。G8 追问回传留二期：桥保留 `window.openai/craft.sendFollowUpMessage` API 面，宿主统一回执 unsupported。
+安全红线（收紧于参考实现）：iframe `sandbox="allow-scripts"`（**绝不**加 allow-same-origin——与 MarkdownHtmlBlock 恰相反，后者 same-origin 无脚本，**两组件刻意分离不合并**）；CSP 无任何网络源（比 spec 更严：删掉 CDN 白名单，堵"经 CDN URL 查询串外带"通道）；postMessage 双向校验 source 标识（S7）。红线有测试静态守护（`__tests__/viz-host.test.ts`，12 用例）。
+
+**G8 追问回传（2026-07-23 落地）**：组件调 `window.craft/openai.sendFollowUpMessage({prompt})` → 桥转发（`use-viz-bridge.ts` 加 `onFollowUpRequest` 回调 + `respondFollowUp` 回执；回调经 ref 消费防 listener 重挂）→ `MarkdownVizBlock` 渲染**内嵌确认卡**（组件下方展示完整 prompt + 取消/发送，S6：显式点发送才回执 ok；不用弹窗——packages/ui 无 Dialog 原语且内嵌不打断阅读流、多面板归属明确）→ 确认后走 `ChatDisplay.handleVizFollowUp` = 本会话 `onSendMessage`（与手打消息同一管线）。透传链：ChatDisplay → TurnCard（两接口两渲染点）→ Markdown `onVizFollowUp` prop → viz 块。**仅聊天渲染链支持**：Preview 面板/全屏 overlay/画廊/standalone 导出无会话上下文，桥自动回执 unsupported（组件须在无追问下仍可用，SKILL.md "Follow-up actions" 章节已教：至多一个动作按钮、prompt 烘焙当前控件值、禁止自动调用）。i18n +1 键 `viz.followUpExplain` ×7。
 
 **二期扩展（2026-07-17 当天）——文件入口 + 导出**：viz 文件成为"可打开的资产"：
 - **全屏活组件 overlay**：`classifyFile` 加了唯一一条**按路径**（非扩展名）的分类规则——`.craft/visualizations/*.html` → `'viz'` 类型 → 链接拦截器路由到 `VizPreviewOverlay`（PreviewOverlay 外壳 + 同一套 `buildVizDocument`/桥）。普通 .html 仍进代码查看器。消息内 viz 块 hover ⤢ → `onFileClick` 走同一管线。

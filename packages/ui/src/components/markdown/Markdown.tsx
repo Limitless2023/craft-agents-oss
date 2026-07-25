@@ -98,6 +98,11 @@ export interface MarkdownProps {
    * Default behavior (prop omitted): all preview blocks are registered.
    */
   disablePreviewBlocks?: ReadonlySet<DisablablePreviewBlock>
+  /**
+   * G8：viz 块的追问发送函数（会话作用域）。仅聊天渲染链传入；
+   * 缺省 = viz 组件的 sendFollowUpMessage 回执 unsupported。
+   */
+  onVizFollowUp?: (prompt: string) => void | Promise<void>
 }
 
 /** Context for collapsible sections */
@@ -135,6 +140,7 @@ function createComponents(
   firstMermaidCodeRef?: React.RefObject<string | null>,
   hideFirstMermaidExpand: boolean = true,
   disablePreviewBlocks?: ReadonlySet<DisablablePreviewBlock>,
+  onVizFollowUp?: (prompt: string) => void | Promise<void>,
 ): Partial<Components> {
   const isPreviewEnabled = (name: DisablablePreviewBlock) => !disablePreviewBlocks?.has(name)
   let blockIndex = 0
@@ -298,7 +304,7 @@ function createComponents(
           }
           // 交互可视化块 → 沙箱 iframe（allow-scripts，断网，主题跟随）
           if (match?.[1] === 'viz' && isPreviewEnabled('viz')) {
-            return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} />, props.node?.position)
+            return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} onFollowUp={onVizFollowUp} />, props.node?.position)
           }
           // PDF preview blocks → inline first page with expand to full viewer
           if (match?.[1] === 'pdf-preview' && isPreviewEnabled('pdf-preview')) {
@@ -440,7 +446,7 @@ function createComponents(
         }
         // 交互可视化块 → 沙箱 iframe（allow-scripts，断网，主题跟随）
         if (match?.[1] === 'viz' && isPreviewEnabled('viz')) {
-          return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} />, props.node?.position)
+          return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} onFollowUp={onVizFollowUp} />, props.node?.position)
         }
         // PDF preview blocks → inline first page with expand to full viewer
         if (match?.[1] === 'pdf-preview' && isPreviewEnabled('pdf-preview')) {
@@ -583,6 +589,7 @@ export function Markdown({
   collapsible = false,
   hideFirstMermaidExpand = true,
   disablePreviewBlocks,
+  onVizFollowUp,
 }: MarkdownProps) {
   // Get collapsible context if enabled
   const collapsibleContext = useCollapsibleMarkdown()
@@ -601,8 +608,8 @@ export function Markdown({
   }
 
   const components = React.useMemo(
-    () => wrapWithSafeProxy(createComponents(mode, onUrlClick, onFileClick, collapsible ? collapsibleContext : null, firstMermaidCodeRef, hideFirstMermaidExpand, disablePreviewBlocks)),
-    [mode, onUrlClick, onFileClick, collapsible, collapsibleContext, hideFirstMermaidExpand, disablePreviewBlocks]
+    () => wrapWithSafeProxy(createComponents(mode, onUrlClick, onFileClick, collapsible ? collapsibleContext : null, firstMermaidCodeRef, hideFirstMermaidExpand, disablePreviewBlocks, onVizFollowUp)),
+    [mode, onUrlClick, onFileClick, collapsible, collapsibleContext, hideFirstMermaidExpand, disablePreviewBlocks, onVizFollowUp]
   )
 
   // Preprocess to convert raw URLs and file paths to markdown links

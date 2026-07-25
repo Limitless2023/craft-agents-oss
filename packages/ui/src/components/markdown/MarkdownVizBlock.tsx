@@ -13,7 +13,7 @@ import { AlertTriangle, Maximize2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/utils'
 import { usePlatform } from '../../context/PlatformContext'
-import { useVizBridge } from './use-viz-bridge'
+import { useVizBridge, type VizFollowUpRequest } from './use-viz-bridge'
 import {
   buildVizDocument,
   classifyVizReadError,
@@ -30,6 +30,11 @@ interface MarkdownVizBlockProps {
   className?: string
   /** 点击 ⤢ 时把文件路径交给链接拦截器（路由到 VizPreviewOverlay 全屏）。 */
   onFileClick?: (path: string) => void
+  /**
+   * G8 追问回传：组件请求代用户发消息时的发送函数（会话作用域，由 ChatDisplay
+   * 绑定）。缺省 = 宿主不支持（Preview 面板等无会话场景），桥自动回执 unsupported。
+   */
+  onFollowUp?: (prompt: string) => void | Promise<void>
 }
 
 const ERROR_KEYS: Record<VizReadError, string> = {
@@ -40,13 +45,43 @@ const ERROR_KEYS: Record<VizReadError, string> = {
   'too-large': 'viz.errorTooLarge',
 }
 
-export function MarkdownVizBlock({ code, className, onFileClick }: MarkdownVizBlockProps) {
+export function MarkdownVizBlock({ code, className, onFileClick, onFollowUp }: MarkdownVizBlockProps) {
   const { t } = useTranslation()
   const { onReadFile } = usePlatform()
   const iframeRef = React.useRef<HTMLIFrameElement | null>(null)
   const [documentHtml, setDocumentHtml] = React.useState<string | null>(null)
   const [error, setError] = React.useState<VizReadError | null>(null)
-  const { height } = useVizBridge(iframeRef)
+  // 追问确认队列（S6：确认卡显式点发送才回执 ok）。同 requestId 去重防组件重发。
+  const [followUpQueue, setFollowUpQueue] = React.useState<VizFollowUpRequest[]>([])
+  const [sendingFollowUp, setSendingFollowUp] = React.useState(false)
+  const activeFollowUp = followUpQueue[0] ?? null
+
+  const handleFollowUpRequest = React.useCallback((req: VizFollowUpRequest) => {
+    setFollowUpQueue(current => (current.some(item => item.requestId === req.requestId) ? current : [...current, req]))
+  }, [])
+
+  const { height, respondFollowUp } = useVizBridge(iframeRef, 180, onFollowUp ? handleFollowUpRequest : undefined)
+
+  const finishFollowUp = React.useCallback(
+    (req: VizFollowUpRequest, ok: boolean, errorMessage?: string) => {
+      respondFollowUp(req.requestId, ok, errorMessage)
+      setFollowUpQueue(current => current.filter(item => item.requestId !== req.requestId))
+    },
+    [respondFollowUp]
+  )
+
+  const confirmFollowUp = React.useCallback(async () => {
+    if (!activeFollowUp || !onFollowUp || sendingFollowUp) return
+    setSendingFollowUp(true)
+    try {
+      await onFollowUp(activeFollowUp.prompt)
+      finishFollowUp(activeFollowUp, true)
+    } catch (err) {
+      finishFollowUp(activeFollowUp, false, err instanceof Error ? err.message : 'send failed')
+    } finally {
+      setSendingFollowUp(false)
+    }
+  }, [activeFollowUp, onFollowUp, sendingFollowUp, finishFollowUp])
 
   const target = React.useMemo(() => parseVizFence(code), [code])
 
@@ -134,6 +169,37 @@ export function MarkdownVizBlock({ code, className, onFileClick }: MarkdownVizBl
         className="block w-full border-0 bg-transparent"
         style={{ height }}
       />
+
+      {/* G8 确认卡：组件请求代发消息 → 展示完整 prompt，显式点发送才发出（S6）。
+          内嵌在组件下方而非弹窗——不打断阅读流，且多面板时归属明确 */}
+      {activeFollowUp && (
+        <div className="mt-1.5 rounded-[8px] border border-border/60 bg-card p-3 shadow-minimal">
+          <div className="mb-1.5 text-[11px] font-medium text-foreground/50">
+            {t('chat.followUp')} · {t('viz.followUpExplain')}
+          </div>
+          <div className="max-h-40 overflow-y-auto whitespace-pre-wrap text-[13px] text-foreground">
+            {activeFollowUp.prompt}
+          </div>
+          <div className="mt-2.5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => finishFollowUp(activeFollowUp, false, 'cancelled')}
+              disabled={sendingFollowUp}
+              className="inline-flex h-7 items-center rounded-lg px-2.5 text-xs font-medium text-foreground/70 transition-colors hover:bg-foreground/[0.05] hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmFollowUp()}
+              disabled={sendingFollowUp}
+              className="inline-flex h-7 items-center rounded-lg bg-accent px-2.5 text-xs font-medium text-accent-foreground transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              {t('shortcuts.sendMessage')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

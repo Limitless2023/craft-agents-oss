@@ -1641,6 +1641,7 @@
   "viz.errorTooLarge": "ビジュアライゼーションファイルが 2 MB を超えています",
   "viz.export": "スタンドアロン HTML をエクスポート",
   "viz.exportFailed": "エクスポートに失敗しました",
+  "viz.followUpExplain": "コンポーネントがこのメッセージの送信を求めています",
   "viz.loading": "ビジュアライゼーションを読み込み中…",
   "viz.openFullscreen": "全画面で開く",
   "vizGallery.count_one": "{{count}} 件",

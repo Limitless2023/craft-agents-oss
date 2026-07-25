@@ -1641,6 +1641,7 @@
   "viz.errorTooLarge": "Visualisierungsdatei überschreitet 2 MB",
   "viz.export": "Als eigenständiges HTML exportieren",
   "viz.exportFailed": "Export fehlgeschlagen",
+  "viz.followUpExplain": "Die Komponente möchte diese Nachricht für dich senden",
   "viz.loading": "Visualisierung wird geladen…",
   "viz.openFullscreen": "Vollbild öffnen",
   "vizGallery.count_one": "{{count}} Widget",

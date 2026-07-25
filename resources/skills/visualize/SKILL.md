@@ -79,6 +79,19 @@ Copy into every compaction summary:
   images from any URL fail silently. Use inline code, inline SVG, `data:` URIs,
   and system fonts only.
 
+## Follow-up actions
+
+- In chat, `window.craft.sendFollowUpMessage({ prompt })` (alias
+  `window.openai.sendFollowUpMessage`) asks the host to send a message on the
+  user's behalf. The host always shows the full prompt for confirmation first;
+  the returned Promise resolves `{ ok: true }` after the user confirms, or
+  `{ ok: false, error }` when cancelled or unsupported — handle both quietly.
+- Use sparingly: at most one clearly labeled action button whose prompt bakes in
+  the CURRENT control values (e.g. "Draft a plan for principal 100k, rate 6%,
+  20 years"). Never call it automatically, on load, or on control change.
+- Outside chat (fullscreen, gallery, exported standalone) the call reports
+  unsupported; the visualization must remain fully useful without it.
+
 ## Composition
 
 Choose the smallest composition that fits.

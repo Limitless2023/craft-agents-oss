@@ -1641,6 +1641,7 @@
   "viz.errorTooLarge": "可视化文件超过 2 MB 上限",
   "viz.export": "导出独立 HTML",
   "viz.exportFailed": "导出失败",
+  "viz.followUpExplain": "组件请求代你发送这条消息",
   "viz.loading": "正在加载可视化…",
   "viz.openFullscreen": "全屏打开",
   "vizGallery.count_one": "{{count}} 个组件",

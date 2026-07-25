@@ -1641,6 +1641,7 @@
   "viz.errorTooLarge": "Plik wizualizacji przekracza 2 MB",
   "viz.export": "Eksportuj samodzielny HTML",
   "viz.exportFailed": "Eksport nie powiódł się",
+  "viz.followUpExplain": "Komponent prosi o wysłanie tej wiadomości w Twoim imieniu",
   "viz.loading": "Wczytywanie wizualizacji…",
   "viz.openFullscreen": "Otwórz na pełnym ekranie",
   "vizGallery.count_one": "{{count}} widżet",

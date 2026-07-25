@@ -1641,6 +1641,7 @@
   "viz.errorTooLarge": "A vizualizációs fájl meghaladja a 2 MB-ot",
   "viz.export": "Önálló HTML exportálása",
   "viz.exportFailed": "Az exportálás sikertelen",
+  "viz.followUpExplain": "A komponens ezt az üzenetet szeretné elküldeni helyetted",
   "viz.loading": "Vizualizáció betöltése…",
   "viz.openFullscreen": "Megnyitás teljes képernyőn",
   "vizGallery.count_one": "{{count}} widget",

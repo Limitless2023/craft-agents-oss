@@ -319,6 +319,8 @@ export interface TurnCardProps {
   onOpenFile?: (path: string) => void
   /** Callback when URL is clicked */
   onOpenUrl?: (url: string) => void
+  /** G8：viz 块追问发送函数（会话作用域，ChatDisplay 绑定）。 */
+  onVizFollowUp?: (prompt: string) => void | Promise<void>
   /** Callback to open response in Monaco editor */
   onPopOut?: (text: string) => void
   /** Callback to open turn details in a new window */
@@ -1396,6 +1398,8 @@ export interface ResponseCardProps {
   onOpenFile?: (path: string) => void
   /** Callback to open URL */
   onOpenUrl?: (url: string) => void
+  /** G8：viz 块追问发送函数。 */
+  onVizFollowUp?: (prompt: string) => void | Promise<void>
   /** Callback to open response in Monaco editor */
   onPopOut?: () => void
   /** Card variant - 'response' for AI messages, 'plan' for plan messages */
@@ -1660,6 +1664,7 @@ export function ResponseCard({
   streamStartTime,
   onOpenFile,
   onOpenUrl,
+  onVizFollowUp,
   onPopOut,
   variant = 'response',
   sessionId,
@@ -2510,6 +2515,7 @@ export function ResponseCard({
                 mode="minimal"
                 onUrlClick={onOpenUrl}
                 onFileClick={onOpenFile}
+                onVizFollowUp={onVizFollowUp}
               >
                 {text}
               </Markdown>
@@ -2669,6 +2675,7 @@ export function ResponseCard({
               mode="minimal"
               onUrlClick={onOpenUrl}
               onFileClick={onOpenFile}
+              onVizFollowUp={onVizFollowUp}
             >
               {displayedText}
             </Markdown>
@@ -2797,6 +2804,7 @@ export const TurnCard = React.memo(function TurnCard({
   onExpandedActivityGroupsChange,
   onOpenFile,
   onOpenUrl,
+  onVizFollowUp,
   onPopOut,
   onOpenDetails,
   onOpenActivityDetails,
@@ -3206,6 +3214,7 @@ export const TurnCard = React.memo(function TurnCard({
                 sessionId={sessionId}
                 onOpenFile={onOpenFile}
                 onOpenUrl={onOpenUrl}
+                onVizFollowUp={onVizFollowUp}
                 onPopOut={onPopOut ? () => onPopOut(response.text) : undefined}
                 variant={response.isPlan ? 'plan' : 'response'}
                 messageId={response.messageId}
@@ -3240,6 +3249,7 @@ export const TurnCard = React.memo(function TurnCard({
             sessionId={sessionId}
             onOpenFile={onOpenFile}
             onOpenUrl={onOpenUrl}
+            onVizFollowUp={onVizFollowUp}
             onPopOut={onPopOut ? () => onPopOut(response.text) : undefined}
             variant={response.isPlan ? 'plan' : 'response'}
             messageId={response.messageId}

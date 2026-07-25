@@ -1504,6 +1504,15 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     [scrollToMessage],
   )
 
+  // G8：viz 组件确认后的追问发送——直接走本会话的 onSendMessage（与手打消息同一管线，
+  // 排队/流式行为一致）。确认 UI 在 MarkdownVizBlock（S6 红线在 ui 层守）。
+  const handleVizFollowUp = useCallback(
+    (prompt: string) => {
+      onSendMessage(prompt)
+    },
+    [onSendMessage],
+  )
+
   const handleFollowUpChipClick = useCallback((item: {
     messageId: string
     annotationId: string
@@ -1808,6 +1817,7 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                         todos={turn.todos}
                         onOpenFile={onOpenFile}
                         onOpenUrl={onOpenUrl}
+                        onVizFollowUp={handleVizFollowUp}
                         isLastResponse={isLastResponse}
                         compactMode={compactMode}
                         sendMessageKey={sendMessageKey}

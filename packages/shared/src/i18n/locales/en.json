@@ -1641,6 +1641,7 @@
   "viz.errorTooLarge": "Visualization file exceeds 2 MB",
   "viz.export": "Export standalone HTML",
   "viz.exportFailed": "Export failed",
+  "viz.followUpExplain": "The component asks to send this message for you",
   "viz.loading": "Loading visualization…",
   "viz.openFullscreen": "Open fullscreen",
   "vizGallery.count_one": "{{count}} widget",
