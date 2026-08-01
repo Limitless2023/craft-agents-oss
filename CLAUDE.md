@@ -233,6 +233,30 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 
+### Auto-expand Running Turns — 运行时展开工具步骤（+ 运行计时器）
+
+**Settings → Appearance →「运行时展开步骤」**：回合运行中自动展开工具步骤列表，完成瞬间自动收回；折叠行右侧显示**实时计时**（Codex 同款，长任务可见地 tick 而非看起来卡住），完成即消失。默认关 = 保持上游（始终折叠）。
+
+**设计依据（联网查证结论）**：Claude Code 并没有"运行展开/完成收起"的动态行为——它是**静态**的（工具行常驻可见、只截断输出到 3–4 行 + `+N lines`，`Ctrl+O` 是会话级 verbose 开关）。用户"跑时能看、跑完干净"的观感其实来自**终端流式滚动的物理特性**：日志从未被收起，只是被新内容顶出视野。卡片式 GUI 没有这个红利，于是用显式的"运行展开→完成收起"模拟同一种焦点管理。社区在 Claude Code 上同时存在两个反方向诉求（[#25776 要默认展开](https://github.com/anthropics/claude-code/issues/25776) / [#40428 要 compactToolOutput 默认折叠](https://github.com/anthropics/claude-code/issues/40428)），故做成设置项而非改死默认值。
+
+**关键状态机（自动 vs 手动的优先级）**：`autoExpanded = 设置开启 && !isComplete && !hasUserToggled.current`，最终 `isExpanded = autoExpanded || persistedExpanded`。
+1. 自动展开是**临时视觉覆盖，不写入持久化状态**（`useTurnCardExpansion` 的 localStorage 不被污染，否则用户下次打开看到的"展开"其实是自动行为的残留）；
+2. 完成瞬间 `isComplete` 翻转 → 覆盖自然失效 → 回落到持久状态（默认折叠），这就是"跑完自动收"；
+3. 用户本轮一旦手动点过（`hasUserToggled`，`toggleExpanded` 已有此 ref），该轮永久听用户的——绝不出现"我点开它自己合上"。
+
+### Tool Output Preview — 工具步骤输出预览（Claude Code 同款 `⎿`）
+
+**Settings → Appearance →「显示工具输出预览」**：展开的每条工具步骤下方，用 `⎿` + 等宽字体显示输出**前 2 行**（每行截断 120 字），多余的报 `+N 行`；出错时优先显示错误原文（那才是此刻要看的）。不点进详情就知道每步结果。默认关。
+
+与「运行时展开步骤」刻意分成两个开关：展开是"看得见有哪些步骤"，输出预览是"不点进去就知道结果"——两个独立的信息密度旋钮，长会话里未必都想要。截断逻辑是纯函数 `tool-output-preview.ts`（先滤空行再取样——工具输出常以空行开头，占着预览额度却什么都不说），**只做取头部+截断，不按工具类型做语义解析**（输出形态千差万别，花哨解析必然在下一个工具上失效）。
+
+布局改造：`ActivityRow` 从单行变成"行 + 可选预览"的纵向容器（`flex-1 min-w-0` 从行上移到容器，否则宽度算不对），预览缩进 22px 与工具名对齐。开关沿既有 `displayMode` 的传递路径下发（TurnCard → ActivityGroupRow → ActivityRow），memo 比较同步加了 `showToolOutput`（否则拨开关后已渲染的行不更新）。
+
+**New files:** `atoms/chat-activity-expansion.ts`（两个 atom）、`packages/ui/chat/elapsed.ts`(+test)、`packages/ui/chat/tool-output-preview.ts`(+test)
+**Modified files:** `packages/ui/chat/TurnCard.tsx`（两 prop + 状态机 + RunningElapsed 组件 + 折叠行渲染）、`ChatDisplay.tsx`（读 atom + 透传 `turn.timestamp`）、`AppearanceSettingsPage.tsx`（开关）、7× i18n（2 键）。
+
+**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

@@ -37,6 +37,7 @@ import { workspaceAvatarColorsAtom } from '@/atoms/workspace-avatar-colors'
 import { kanbanColumnColorsAtom, kanbanColumnStatusAtom, kanbanLivePulseAtom } from '@/atoms/kanban'
 import { showBackgroundFinishedChipAtom } from '@/atoms/background-finished'
 import { expandLongResponsesAtom } from '@/atoms/chat-response-height'
+import { autoExpandRunningTurnsAtom, showToolOutputPreviewAtom } from '@/atoms/chat-activity-expansion'
 import { KANBAN_COLUMNS } from '@/components/app-shell/kanban/status-column'
 import { DEFAULT_KANBAN_COLUMN_COLORS } from '@/components/app-shell/kanban/kanban-colors'
 import type { KanbanColumnId } from '@/components/app-shell/kanban/types'
@@ -216,6 +217,12 @@ export default function AppearanceSettingsPage() {
 
   // 长回复展开（renderer-only 外观偏好，localStorage 持久化——ChatDisplay 读取）
   const [expandLongResponses, setExpandLongResponses] = useAtom(expandLongResponsesAtom)
+
+  // 运行中自动展开工具步骤（完成即收）
+  const [autoExpandRunningTurns, setAutoExpandRunningTurns] = useAtom(autoExpandRunningTurnsAtom)
+
+  // 工具步骤下方的输出预览
+  const [showToolOutputPreview, setShowToolOutputPreview] = useAtom(showToolOutputPreviewAtom)
 
   // Load preset themes on mount
   useEffect(() => {
@@ -463,6 +470,18 @@ export default function AppearanceSettingsPage() {
                     description={t("settings.appearance.expandLongResponsesDesc")}
                     checked={expandLongResponses}
                     onCheckedChange={setExpandLongResponses}
+                  />
+                  <SettingsToggle
+                    label={t("settings.appearance.autoExpandRunningTurns")}
+                    description={t("settings.appearance.autoExpandRunningTurnsDesc")}
+                    checked={autoExpandRunningTurns}
+                    onCheckedChange={setAutoExpandRunningTurns}
+                  />
+                  <SettingsToggle
+                    label={t("settings.appearance.toolOutputPreview")}
+                    description={t("settings.appearance.toolOutputPreviewDesc")}
+                    checked={showToolOutputPreview}
+                    onCheckedChange={setShowToolOutputPreview}
                   />
                   <SettingsRow
                     label={t("settings.appearance.projectColorTreatment")}

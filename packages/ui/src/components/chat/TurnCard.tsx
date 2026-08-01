@@ -26,6 +26,8 @@ import {
   Heart,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { formatElapsed } from './elapsed'
+import { previewToolOutput } from './tool-output-preview'
 import { Markdown } from '../markdown'
 import { Spinner } from '../ui/LoadingIndicator'
 import { type IslandTransitionConfig } from '../ui'
@@ -323,6 +325,14 @@ export interface TurnCardProps {
   onVizFollowUp?: (prompt: string) => void | Promise<void>
   /** 长回复完全展开（不限高、不内滚）——大屏偏好，见 expandLongResponsesAtom。 */
   expandLongResponses?: boolean
+  /**
+   * 运行中自动展开工具步骤，完成即自动收回（设置项）。
+   * 只是临时的视觉覆盖——不写入持久化展开状态；用户本轮一旦手动点过展开/折叠，
+   * 该轮就完全听用户的，自动逻辑不再插手。
+   */
+  autoExpandWhileRunning?: boolean
+  /** 本轮开始时间（ms）。提供后，运行中的折叠行显示实时计时。 */
+  turnStartedAt?: number
   /** Callback to open response in Monaco editor */
   onPopOut?: (text: string) => void
   /** Callback to open turn details in a new window */
@@ -347,6 +357,8 @@ export interface TurnCardProps {
   sessionFolderPath?: string
   /** Display mode: 'detailed' shows all info, 'informative' hides MCP/API names and params */
   displayMode?: 'informative' | 'detailed'
+  /** 在每条工具步骤下方显示输出前几行（Claude Code 同款）。见 showToolOutputPreviewAtom。 */
+  showToolOutput?: boolean
   /** Animate response appearance (for playground demos) */
   animateResponse?: boolean
   /** Compact-footer layout. Used by EditPopover (popover embedding) and ChatPage in
@@ -883,6 +895,8 @@ interface ActivityRowProps {
   sessionFolderPath?: string
   /** Display mode: 'detailed' shows all info, 'informative' hides MCP/API names and params */
   displayMode?: 'informative' | 'detailed'
+  /** 在行下方显示工具输出前几行。 */
+  showToolOutput?: boolean
 }
 
 /**
@@ -904,7 +918,7 @@ function TreeViewConnector({ depth }: { depth: number; isLastChild?: boolean }) 
 }
 
 /** Single activity row in expanded view */
-function ActivityRow({ activity, onOpenDetails, isLastChild, sessionFolderPath, displayMode = 'detailed' }: ActivityRowProps) {
+function ActivityRow({ activity, onOpenDetails, isLastChild, sessionFolderPath, displayMode = 'detailed', showToolOutput = false }: ActivityRowProps) {
   const depth = activity.depth || 0
 
   // Intermediate messages (LLM commentary) - render with dashed circle icon
@@ -916,21 +930,23 @@ function ActivityRow({ activity, onOpenDetails, isLastChild, sessionFolderPath, 
     return (
       <div className="flex items-stretch">
         <TreeViewConnector depth={depth} isLastChild={isLastChild} />
+        {/* 旁白（agent 的思考/说明）完整换行显示——它是成句的判断，
+            截成一行就读不懂了；items-start 让图标对齐首行而非垂直居中。 */}
         <div
           className={cn(
-            "group/row flex items-center gap-2 py-0.5 text-foreground/75 flex-1 min-w-0",
+            "group/row flex items-start gap-2 py-0.5 text-foreground/75 flex-1 min-w-0",
             SIZE_CONFIG.fontSize
           )}
           onClick={onOpenDetails && isComplete ? onOpenDetails : undefined}
         >
           {isThinking ? (
-            <div className={cn(SIZE_CONFIG.iconSize, "flex items-center justify-center shrink-0")}>
+            <div className={cn(SIZE_CONFIG.iconSize, "mt-0.5 flex items-center justify-center shrink-0")}>
               <Spinner className={SIZE_CONFIG.spinnerSize} />
             </div>
           ) : (
-            <MessageCircleDashed className={cn(SIZE_CONFIG.iconSize, "shrink-0")} />
+            <MessageCircleDashed className={cn(SIZE_CONFIG.iconSize, "mt-0.5 shrink-0")} />
           )}
-          <span className={cn("truncate flex-1", onOpenDetails && isComplete && "group-hover/row:underline")}>{displayContent}</span>
+          <span className={cn("flex-1 min-w-0 break-words", onOpenDetails && isComplete && "group-hover/row:underline")}>{displayContent}</span>
           {/* Open details button */}
           {onOpenDetails && isComplete && (
             <div
@@ -947,7 +963,7 @@ function ActivityRow({ activity, onOpenDetails, isLastChild, sessionFolderPath, 
                 }
               }}
               className={cn(
-                "p-0.5 rounded-[3px] opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0",
+                "mt-0.5 p-0.5 rounded-[3px] opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0",
                 "hover:bg-muted/80 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               )}
             >
@@ -1018,6 +1034,11 @@ function ActivityRow({ activity, onOpenDetails, isLastChild, sessionFolderPath, 
   const isComplete = activity.status === 'completed' || activity.status === 'error'
   const isBackgrounded = activity.status === 'backgrounded'
 
+  // 工具输出预览：出错时优先显示错误原文——那才是此刻真正要看的东西
+  const outputPreview = showToolOutput && isComplete
+    ? previewToolOutput(activity.status === 'error' ? (activity.error || activity.content) : activity.content)
+    : null
+
   // For backgrounded tasks, show task/shell ID and elapsed time
   const backgroundInfo = isBackgrounded
     ? activity.taskId
@@ -1030,9 +1051,11 @@ function ActivityRow({ activity, onOpenDetails, isLastChild, sessionFolderPath, 
   return (
     <div className="flex items-stretch">
       <TreeViewConnector depth={depth} isLastChild={isLastChild} />
+      {/* 纵向容器：行本身 + 可选的输出预览（flex-1 从行上移到此处，否则宽度算不对） */}
+      <div className="flex-1 min-w-0">
       <div
         className={cn(
-          "group/row flex items-center gap-2 py-0.5 text-muted-foreground flex-1 min-w-0",
+          "group/row flex items-center gap-2 py-0.5 text-muted-foreground min-w-0",
           SIZE_CONFIG.fontSize
         )}
         onClick={onOpenDetails && isComplete ? onOpenDetails : undefined}
@@ -1206,6 +1229,25 @@ function ActivityRow({ activity, onOpenDetails, isLastChild, sessionFolderPath, 
           </div>
         )}
       </div>
+      {/* 工具输出预览：⎿ 前缀 + 等宽字体（Claude Code 同款视觉）。
+          缩进 22px 与工具名对齐（图标 14 + gap 8）。 */}
+      {outputPreview && (
+        <div className="pl-[22px] pb-0.5 font-mono text-[11px] leading-4 text-muted-foreground/55">
+          {outputPreview.lines.map((line, i) => (
+            <div key={i} className="truncate">
+              <span className="mr-1 opacity-50">{i === 0 ? '⎿' : ' '}</span>
+              {line}
+            </div>
+          ))}
+          {outputPreview.hiddenLineCount > 0 && (
+            <div className="truncate opacity-60">
+              <span className="mr-1 opacity-0">⎿</span>
+              {i18n.t('chat.moreLines', { count: outputPreview.hiddenLineCount })}
+            </div>
+          )}
+        </div>
+      )}
+      </div>
     </div>
   )
 }
@@ -1228,13 +1270,15 @@ interface ActivityGroupRowProps {
   sessionFolderPath?: string
   /** Display mode: 'detailed' shows all info, 'informative' hides MCP/API names and params */
   displayMode?: 'informative' | 'detailed'
+  /** 在子活动行下方显示工具输出前几行。 */
+  showToolOutput?: boolean
 }
 
 /**
  * Renders a Task subagent with its child activities grouped together.
  * Provides visual containment and collapsible children.
  */
-function ActivityGroupRow({ group, expandedGroups: externalExpandedGroups, onExpandedGroupsChange, onOpenActivityDetails, animationIndex = 0, sessionFolderPath, displayMode = 'detailed' }: ActivityGroupRowProps) {
+function ActivityGroupRow({ group, expandedGroups: externalExpandedGroups, onExpandedGroupsChange, onOpenActivityDetails, animationIndex = 0, sessionFolderPath, displayMode = 'detailed', showToolOutput = false }: ActivityGroupRowProps) {
   // Use local state if no controlled state provided
   const [localExpandedGroups, setLocalExpandedGroups] = useState<Set<string>>(new Set())
   const expandedGroups = externalExpandedGroups ?? localExpandedGroups
@@ -1373,7 +1417,7 @@ function ActivityGroupRow({ group, expandedGroups: externalExpandedGroups, onExp
                     onOpenDetails={onOpenActivityDetails ? () => onOpenActivityDetails(child) : undefined}
                     isLastChild={idx === group.children.length - 1}
                     sessionFolderPath={sessionFolderPath}
-                    displayMode={displayMode}
+                    displayMode={displayMode} showToolOutput={showToolOutput}
                   />
                 </motion.div>
               ))}
@@ -1492,6 +1536,23 @@ function BranchDropdown({ onBranch }: BranchDropdownProps) {
 }
 
 const MAX_HEIGHT = 540
+
+/**
+ * 折叠行上的运行计时。每秒自重绘一次；只在回合运行中挂载，
+ * 完成时父级卸载它，计时器随之停止（无需额外清理逻辑）。
+ */
+function RunningElapsed({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground/60">
+      {formatElapsed(now - startedAt)}
+    </span>
+  )
+}
 
 function clearAnnotationMarks(root: HTMLElement): void {
   const annotatedInlineCodeNodes = root.querySelectorAll<HTMLElement>('code[data-ca-annotation-inline-code="true"]')
@@ -2830,6 +2891,8 @@ export const TurnCard = React.memo(function TurnCard({
   onOpenUrl,
   onVizFollowUp,
   expandLongResponses,
+  autoExpandWhileRunning = false,
+  turnStartedAt,
   onPopOut,
   onOpenDetails,
   onOpenActivityDetails,
@@ -2842,6 +2905,7 @@ export const TurnCard = React.memo(function TurnCard({
   isLastResponse,
   sessionFolderPath,
   displayMode = 'detailed',
+  showToolOutput = false,
   animateResponse = false,
   compactMode = false,
   onBranch,
@@ -2871,10 +2935,17 @@ export const TurnCard = React.memo(function TurnCard({
 
   // Use local state if no controlled state provided
   const [localExpandedTurns, setLocalExpandedTurns] = useState<Set<string>>(() => defaultExpanded ? new Set([turnId]) : new Set())
-  const isExpanded = externalIsExpanded ?? localExpandedTurns.has(turnId)
+  const persistedExpanded = externalIsExpanded ?? localExpandedTurns.has(turnId)
 
   // Track if user has toggled expansion (skip animation on initial mount)
   const hasUserToggled = useRef(false)
+
+  // ── 运行中自动展开（临时视觉覆盖，不落持久化）──
+  // 三个条件缺一不可：设置开启、本轮仍在跑、用户本轮没手动干预过。
+  // 完成瞬间 isComplete 翻转 → 覆盖自然失效 → 回落到持久状态（默认折叠），
+  // 这就是"跑时能看、跑完干净"；用户点过一次即锁定，绝不出现"我点开它自己合上"。
+  const autoExpanded = autoExpandWhileRunning && !isComplete && !hasUserToggled.current
+  const isExpanded = autoExpanded || persistedExpanded
 
   // Ref for scrollable activities container (to scroll to bottom on expand)
   const activitiesContainerRef = useRef<HTMLDivElement>(null)
@@ -3058,6 +3129,12 @@ export const TurnCard = React.memo(function TurnCard({
               </AnimatePresence>
             </span>
 
+            {/* 运行计时（Codex 同款）：长任务在摘要行上可见地 tick，
+                而不是让人怀疑是不是卡住了。完成即消失。 */}
+            {!isComplete && turnStartedAt != null && (
+              <RunningElapsed startedAt={turnStartedAt} />
+            )}
+
             {/* Turn actions menu - use platform override or default */}
             {renderActionsMenu ? renderActionsMenu() : (
               <TurnCardActionsMenu
@@ -3108,7 +3185,7 @@ export const TurnCard = React.memo(function TurnCard({
                           onOpenActivityDetails={onOpenActivityDetails}
                           animationIndex={index}
                           sessionFolderPath={sessionFolderPath}
-                          displayMode={displayMode}
+                          displayMode={displayMode} showToolOutput={showToolOutput}
                         />
                       ) : (
                         <motion.div
@@ -3125,7 +3202,7 @@ export const TurnCard = React.memo(function TurnCard({
                             activity={item}
                             onOpenDetails={onOpenActivityDetails ? () => onOpenActivityDetails(item) : undefined}
                             sessionFolderPath={sessionFolderPath}
-                            displayMode={displayMode}
+                            displayMode={displayMode} showToolOutput={showToolOutput}
                           />
                         </motion.div>
                       )
@@ -3149,7 +3226,7 @@ export const TurnCard = React.memo(function TurnCard({
                           onOpenDetails={onOpenActivityDetails ? () => onOpenActivityDetails(activity) : undefined}
                           isLastChild={lastChildSet.has(activity.id)}
                           sessionFolderPath={sessionFolderPath}
-                          displayMode={displayMode}
+                          displayMode={displayMode} showToolOutput={showToolOutput}
                         />
                       </motion.div>
                     ))
@@ -3321,6 +3398,8 @@ export const TurnCard = React.memo(function TurnCard({
 
   // Re-render if displayMode changed
   if (prev.displayMode !== next.displayMode) return false
+  // 工具输出预览开关变化必须重渲染（否则开关拨动后已渲染的行不更新）
+  if (prev.showToolOutput !== next.showToolOutput) return false
 
   // Re-render if compactMode changed (affects ResponseCard footer rendering)
   if (prev.compactMode !== next.compactMode) return false

@@ -74,6 +74,7 @@ import { navigate, routes } from "@/lib/navigate"
 import { useAtomValue } from "jotai"
 import { CHAT_LAYOUT } from "@/config/layout"
 import { expandLongResponsesAtom } from "@/atoms/chat-response-height"
+import { autoExpandRunningTurnsAtom, showToolOutputPreviewAtom } from "@/atoms/chat-activity-expansion"
 import { PromptRail } from "./PromptRail"
 import { promptLabel, type PromptRailItem } from "./prompt-rail-core"
 import { collectFileChangesFromActivities, getFirstFileChangeIdForActivity } from "@/lib/file-changes"
@@ -615,6 +616,10 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
   // 长回复展开偏好（Settings → Appearance）：大屏上让内容铺开，不在卡片内自成滚动区
   const expandLongResponses = useAtomValue(expandLongResponsesAtom)
+  // 运行中自动展开工具步骤（完成即收）——终端流式观感在卡片 GUI 里的等价物
+  const autoExpandRunningTurns = useAtomValue(autoExpandRunningTurnsAtom)
+  // 工具步骤下方显示输出前几行（Claude Code 同款）
+  const showToolOutputPreview = useAtomValue(showToolOutputPreviewAtom)
 
   // ============================================================================
   // Search Highlighting (from session list search)
@@ -1911,6 +1916,9 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                         onOpenUrl={onOpenUrl}
                         onVizFollowUp={handleVizFollowUp}
                         expandLongResponses={expandLongResponses}
+                        autoExpandWhileRunning={autoExpandRunningTurns}
+                        showToolOutput={showToolOutputPreview}
+                        turnStartedAt={turn.timestamp}
                         isLastResponse={isLastResponse}
                         compactMode={compactMode}
                         sendMessageKey={sendMessageKey}
