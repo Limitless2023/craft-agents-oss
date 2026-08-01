@@ -257,6 +257,35 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 
+### Preview Panel for Code — 代码文件进 Preview 面板
+
+Preview 面板不再是 `.md` 专属：**代码/文本/JSON 文件点开后默认 dock 进右侧面板**（语法高亮只读视图），与聊天并排对照——agent 写的脚本可以钉成常驻参照物，一边让它改一边看改成什么样（面板本来就有 2s 自动刷新和 diff）。
+
+改造成本远低于预期，因为**面板的地基本来就与扩展名无关**：多 tab、内容缓存、刷新、diff、滚动位置记忆、拖拽排序、⌘R/⌘W 全部零改动；`sidebar-docs` 的 tab 结构只存 filePath，`openSidebarDocTab` 从来就没有 `.md` 校验。真正的关卡只有一处——`App.tsx` 的 `autoDock` 判定写死 `state.type === 'markdown'`。
+
+关键改动：
+1. **拆关卡**：`autoDock` 放宽到 markdown/code/text/json 四类（`DOCKABLE_TYPES`），三个 overlay 分支各加 `if (autoDock) return null` 防闪一帧全屏；`useLinkInterceptor` 给 Code/Text/JSON 三个 preview 变体补 `fullscreen?` 字段（此前只有 markdown 有，否则 ⤢ 旁路对代码失效会造成循环 dock）。
+2. **渲染分叉**：`PreviewPanel` 以 `isMarkdownTab`（唯一真相）分流——markdown 走既有文档渲染（标注/大纲/阅读模式都挂在这支），**其余走 `ShikiCodeViewer`**。⚠ **代码绝不能走 `AnnotatableMarkdownDocument`**：源码会被 markdown 解析器吃掉（`#` 变标题、缩进变代码块）。标注对代码一并关闭——它锚定在渲染后文本坐标系上，对 shiki 切分过的 span 不可靠。
+3. **md 专属 UI 闸门**：大纲（代码扫不出 h1-h4，必然为空）、阅读模式（无标注自然隐藏）、**编辑按钮**（编辑器写死 markdown 高亮，用它编辑 .py 会看到错误着色——待接入 `@codemirror/language-data` 后开放）。**diff 保留**，对代码比对 md 更有价值。
+4. 拖入过滤与文件树"Open in fullscreen"菜单项同步放宽到"面板能渲染的文本类文件"（排除图片/PDF）。
+
+**Modified files:** `right-sidebar/PreviewPanel.tsx`、`App.tsx`（autoDock + 三个分支）、`hooks/useLinkInterceptor.ts`（fullscreen 字段）、`right-sidebar/{SessionFilesSection,WorkingDirectoryTree}.tsx`（全屏旁路条件）。
+
+#### 代码引用到对话（一次性，不留高亮）
+
+选中代码 → 浮出「引用到对话」按钮 → 进入输入框上方的 chip（`文件名:行号`）→ 随下条消息发出后清空，**代码上不留任何标记**。与 markdown 的标注追问刻意分家：
+- **不进标注体系**：标注要锚点自愈（文件改了要能重定位），而代码经语法高亮切成 span 后锚不稳；一次性引用"问完即弃"，根本不需要重定位——`PreviewPanel` 里"代码关闭标注"那条注释预留的正是这个出口。
+- **不持久化**：`atoms/transient-quotes.ts` 是普通 `atomFamily`（无 localStorage），引用不该跨重启复活。走 atom 而非 props 的原因同 preview-annotations：PreviewPanel 与 ChatDisplay 组件树不连通。
+- **复用 chip 下游**：合并进 `pendingFollowUpAnnotations`（带 `transientQuoteId` 标记），chip UI / `formatFollowUpSection` / 排序去重全部零改动；`handleSubmit` 三类分流（message → IPC 标记已发、preview → 渲染层 store、transient → 直接清空）。
+- **note 允许为空**：代码引用的问题写在输入框正文里，`formatFollowUpSection` 遇空 note 只输出引文行（不留孤零零的 `→`）；chip 标签回落显示 `sourceLabel`。
+- **行号从 DOM 读**：`ShikiCodeViewer` 加 `data-line` transformer，**降级分支（高亮未就绪）同步按行拆并带 data-line**——两分支同构，否则行号推算会在加载瞬间失效。
+- **可单条丢弃**：chip 上的 ✕ 只给 `removable` 项（= 一次性引用）。标注类 follow-up 不给——那要删的是标注本身（持久、有高亮），语义远重于"丢掉一条引用"，应走标注岛而非输入框。chip 整体是 button，✕ 用 `span[role=button]` + stopPropagation 避免嵌套按钮。
+
+**New files:** `atoms/transient-quotes.ts`、`right-sidebar/CodeQuoteLayer.tsx`
+**Modified files:** `packages/ui/code-viewer/ShikiCodeViewer.tsx`（data-line×2 分支）、`ChatDisplay.tsx`（合并+清空）、`ChatDisplay.follow-ups.ts`（transientQuoteId + 空 note）、`PreviewPanel.tsx`（挂载）、7× i18n（`preview.quoteToChat`）。
+
+**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

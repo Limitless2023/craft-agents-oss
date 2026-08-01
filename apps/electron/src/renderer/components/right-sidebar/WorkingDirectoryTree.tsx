@@ -7,6 +7,7 @@
 import * as React from 'react'
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 import { File, Folder, FolderOpen, FileText, Image, FileCode, ChevronRight, Maximize2, ExternalLink } from 'lucide-react'
+import { classifyFile } from '@craft-agent/ui'
 import { cn } from '@/lib/utils'
 import { useAppShellContext } from '@/context/AppShellContext'
 import {
@@ -101,7 +102,12 @@ const TreeNode = memo(function TreeNode({ entry, depth, onFileClick, onOpenFulls
     }
   }, [entry, isExpanded, children, onFileClick])
 
-  const isMarkdown = entry.type === 'file' && /\.(md|mdx|markdown)$/i.test(entry.name)
+  // 文本类文件（md + 代码/文本/json）默认打开都进 Preview 看板，故都需要全屏旁路；
+  // 图片/PDF 走系统或专用 overlay，不在此列
+  const isMarkdown =
+    entry.type === 'file' &&
+    classifyFile(entry.name).canPreview &&
+    !/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|pdf)$/i.test(entry.name)
 
   const buttonEl = (
     <button

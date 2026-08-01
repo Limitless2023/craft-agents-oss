@@ -745,6 +745,7 @@
   "preview.markdownPreview": "Vista previa Markdown",
   "preview.parseError": "Error de análisis",
   "preview.pdfPreview": "Vista previa PDF",
+  "preview.quoteToChat": "Citar en el chat",
   "projectInfo.assetUploaded": "{{name}} subido",
   "projectInfo.color": "Color",
   "projectInfo.colorClear": "Borrar",

@@ -26,6 +26,7 @@ import {
   StyledContextMenuItem,
 } from '@/components/ui/styled-context-menu'
 import type { SessionFile } from '../../../shared/types'
+import { classifyFile } from '@craft-agent/ui'
 import { cn } from '@/lib/utils'
 import * as storage from '@/lib/local-storage'
 import { useAppShellContext } from '@/context/AppShellContext'
@@ -391,8 +392,8 @@ function FileTreeItem({
               {t("chat.openFile")}
             </StyledContextMenuItem>
           )}
-          {/* Open in fullscreen — .md only（默认打开已进 Preview 看板，这里是显式全屏旁路） */}
-          {file.type === 'file' && /\.md$/i.test(file.name) && onOpenFullscreen && (
+          {/* Open in fullscreen — 文本类文件的默认打开已进 Preview 看板，这里是显式全屏旁路 */}
+          {file.type === 'file' && classifyFile(file.name).canPreview && !/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|pdf)$/i.test(file.name) && onOpenFullscreen && (
             <StyledContextMenuItem onSelect={() => onOpenFullscreen(file)}>
               <Maximize2 className="h-3.5 w-3.5" />
               Open in fullscreen

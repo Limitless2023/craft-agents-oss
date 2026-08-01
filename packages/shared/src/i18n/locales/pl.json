@@ -745,6 +745,7 @@
   "preview.markdownPreview": "Podgląd Markdown",
   "preview.parseError": "Błąd analizy",
   "preview.pdfPreview": "Podgląd PDF",
+  "preview.quoteToChat": "Zacytuj w czacie",
   "projectInfo.assetUploaded": "Przesłano {{name}}",
   "projectInfo.color": "Kolor",
   "projectInfo.colorClear": "Wyczyść",

@@ -30,6 +30,8 @@ export type PendingFollowUpAnnotation = {
   sourceLabel?: string
   /** Preview follow-ups only: absolute file path (routes "mark sent" to the preview store). */
   previewFilePath?: string
+  /** 代码视图的一次性引用 id：有此字段表示不落任何存储，发送后直接丢弃。 */
+  transientQuoteId?: string
 }
 
 /**
@@ -60,10 +62,10 @@ export function formatFollowUpSection(
   const items = followUps.map((followUp, idx) => {
     const quoteText = normalizeFollowUpText(followUp.selectedText)
     const labelled = followUp.sourceLabel ? `(${followUp.sourceLabel}) ${quoteText}` : quoteText
-    return [
-      `> [#${idx + 1}] ${labelled}`,
-      `→ ${followUp.note}`,
-    ].join('\n')
+    const head = `> [#${idx + 1}] ${labelled}`
+    // 备注为空 = 代码引用（问题写在正文里），只输出引文行，
+    // 免得留一个空的 "→" 让 agent 以为漏了什么
+    return followUp.note ? [head, `→ ${followUp.note}`].join('\n') : head
   })
 
   const body = ['**Follow-ups**', items.join('\n\n---\n\n')].join('\n\n')

@@ -99,6 +99,15 @@ export function ShikiCodeViewer({
         const html = await codeToHtml(code, {
           lang,
           theme: resolvedShikiTheme,
+          // 每行打上真实行号（含 startLine 偏移），让"选区 → 第几行"成为一次
+          // closest('[data-line]') 查询，而不是靠数 DOM 兄弟节点推算。
+          transformers: [
+            {
+              line(node, line) {
+                node.properties['data-line'] = String(startLine + line - 1)
+              },
+            },
+          ],
         })
 
         if (!cancelled) {
@@ -166,8 +175,17 @@ export function ShikiCodeViewer({
         {/* Code content */}
         <div className="flex-1 min-w-0 p-4 overflow-x-auto">
           {isLoading || !highlighted ? (
+            // 降级分支（高亮未就绪/失败）也按行拆并带 data-line——两个分支同构，
+            // 依赖行号的功能（引用到对话）才不会在这一瞬间失效。
             <pre className="font-mono text-[13px] leading-[1.6] whitespace-pre">
-              <code>{code}</code>
+              <code>
+                {code.split('\n').map((lineText, index) => (
+                  <span key={index} className="line" data-line={String(startLine + index)}>
+                    {lineText}
+                    {'\n'}
+                  </span>
+                ))}
+              </code>
             </pre>
           ) : (
             <div

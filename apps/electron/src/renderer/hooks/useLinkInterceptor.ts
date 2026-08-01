@@ -45,6 +45,8 @@ interface CodePreview {
   content: string | null
   language: string
   error?: string
+  /** 显式全屏（Preview 看板的 ⤢ 按钮）——跳过自动 dock 到侧边栏 */
+  fullscreen?: boolean
 }
 
 interface MarkdownPreview {
@@ -61,6 +63,8 @@ interface JSONPreview {
   filePath: string
   content: string | null
   error?: string
+  /** 显式全屏（Preview 看板的 ⤢ 按钮）——跳过自动 dock 到侧边栏 */
+  fullscreen?: boolean
 }
 
 interface TextPreview {
@@ -68,6 +72,8 @@ interface TextPreview {
   filePath: string
   content: string | null
   error?: string
+  /** 显式全屏（Preview 看板的 ⤢ 按钮）——跳过自动 dock 到侧边栏 */
+  fullscreen?: boolean
 }
 
 /** 交互可视化（.craft/visualizations/*.html）——内容由 VizPreviewOverlay 自读自渲。 */
@@ -451,13 +457,13 @@ async function fuzzyResolvePath(
 function buildInitialTextState(type: FilePreviewType, path: string, fullscreen?: boolean): FilePreviewState {
   switch (type) {
     case 'code':
-      return { type: 'code', filePath: path, content: null, language: getLanguageFromPath(path) }
+      return { type: 'code', filePath: path, content: null, language: getLanguageFromPath(path), fullscreen }
     case 'markdown':
       return { type: 'markdown', filePath: path, content: null, fullscreen }
     case 'json':
-      return { type: 'json', filePath: path, content: null }
+      return { type: 'json', filePath: path, content: null, fullscreen }
     case 'text':
-      return { type: 'text', filePath: path, content: null }
+      return { type: 'text', filePath: path, content: null, fullscreen }
     default:
       // Should never happen — image/pdf are handled before this function is called
       return { type: 'text', filePath: path, content: null }

@@ -745,6 +745,7 @@
   "preview.markdownPreview": "Markdown 预览",
   "preview.parseError": "解析错误",
   "preview.pdfPreview": "PDF 预览",
+  "preview.quoteToChat": "引用到对话",
   "projectInfo.assetUploaded": "已上传 {{name}}",
   "projectInfo.color": "颜色",
   "projectInfo.colorClear": "清除",

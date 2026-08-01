@@ -2254,10 +2254,9 @@ function FilePreviewRenderer({
   const theme = isDark ? 'dark' : 'light' as const
 
   // ┌─────────────────────────────────────────────────────────────────────┐
-  // │ Dock-to-sidebar handler — only meaningful for markdown overlays    │
-  // │ since the Preview panel is .md-only. Pushes the current filePath  │
-  // │ as a tab into the focused session's sidebar-docs atom, flips the  │
-  // │ right sidebar to 'preview', and closes the overlay.                │
+  // │ Dock-to-sidebar handler — 把当前文件作为 tab 推进聚焦会话的        │
+  // │ sidebar-docs，切到 preview 面板并关闭 overlay。Preview 面板已支持  │
+  // │ 文本类文件（markdown 渲染 / 代码高亮），不再是 .md 专属。          │
   // └─────────────────────────────────────────────────────────────────────┘
   const focusedSessionId = useAtomValue(focusedSessionIdAtom)
   // ── 全屏 overlay 注解 hook（无条件调用，遵守 React Hooks 规则） ──
@@ -2273,12 +2272,16 @@ function FilePreviewRenderer({
   }, [focusedSessionId, setSidebarDocs, updateRightSidebar, onClose])
 
   // ┌─────────────────────────────────────────────────────────────────────┐
-  // │ Markdown 默认改走 Preview 看板（侧边栏对照阅读优先）：状态一到就    │
-  // │ dock 进侧边栏、不渲染 overlay。两条回落到全屏的路径：              │
+  // │ 文本类文件默认走 Preview 看板（侧边栏对照阅读优先）：状态一到就     │
+  // │ dock 进侧边栏、不渲染 overlay。markdown 渲染成文档、代码/文本/json │
+  // │ 走语法高亮——两者都受益于"边看聊天边对照"，而不是被全屏盖住。      │
+  // │ 两条回落到全屏的路径：                                             │
   // │   1. state.fullscreen —— Preview 看板 ⤢ 按钮的显式全屏             │
   // │   2. 无聚焦会话（如冷启动 Finder 打开）—— 看板挂不上               │
   // └─────────────────────────────────────────────────────────────────────┘
-  const autoDock = state.type === 'markdown' && !state.fullscreen && !!focusedSessionId
+  const DOCKABLE_TYPES = ['markdown', 'code', 'text', 'json'] as const
+  const isDockableType = (DOCKABLE_TYPES as readonly string[]).includes(state.type)
+  const autoDock = isDockableType && !('fullscreen' in state && state.fullscreen) && !!focusedSessionId
   useEffect(() => {
     if (autoDock) handleDockToSidebar(overlayFilePath)
   }, [autoDock, overlayFilePath, handleDockToSidebar])
@@ -2312,6 +2315,8 @@ function FilePreviewRenderer({
 
     case 'code':
     case 'text':
+      // 自动 dock 即将接管（effect 已排队）——不渲染 overlay，避免闪一帧全屏
+      if (autoDock) return null
       return (
         <CodePreviewOverlay
           isOpen
@@ -2366,6 +2371,8 @@ function FilePreviewRenderer({
     }
 
     case 'json': {
+      // 自动 dock 即将接管（effect 已排队）——不渲染 overlay，避免闪一帧全屏
+      if (autoDock) return null
       // JSONPreviewOverlay expects parsed data, not a raw string.
       // @uiw/react-json-view crashes on null value, so guard against it.
       let parsedData: unknown = null

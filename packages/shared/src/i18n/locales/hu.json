@@ -745,6 +745,7 @@
   "preview.markdownPreview": "Markdown előnézet",
   "preview.parseError": "Elemzési hiba",
   "preview.pdfPreview": "PDF előnézet",
+  "preview.quoteToChat": "Idézés a beszélgetésben",
   "projectInfo.assetUploaded": "{{name}} feltöltve",
   "projectInfo.color": "Szín",
   "projectInfo.colorClear": "Törlés",

@@ -75,6 +75,7 @@ import { useAtomValue } from "jotai"
 import { CHAT_LAYOUT } from "@/config/layout"
 import { expandLongResponsesAtom } from "@/atoms/chat-response-height"
 import { autoExpandRunningTurnsAtom, showToolOutputPreviewAtom } from "@/atoms/chat-activity-expansion"
+import { useTransientQuotes } from "@/atoms/transient-quotes"
 import { PromptRail } from "./PromptRail"
 import { promptLabel, type PromptRailItem } from "./prompt-rail-core"
 import { collectFileChangesFromActivities, getFirstFileChangeIdForActivity } from "@/lib/file-changes"
@@ -616,6 +617,12 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
   // 长回复展开偏好（Settings → Appearance）：大屏上让内容铺开，不在卡片内自成滚动区
   const expandLongResponses = useAtomValue(expandLongResponsesAtom)
+  // 代码视图的一次性引用（Preview 面板写入，此处消费成 chip、可单条丢弃、发送后清空）
+  const {
+    quotes: transientQuotes,
+    remove: removeTransientQuote,
+    clear: clearTransientQuotes,
+  } = useTransientQuotes(session?.id)
   // 运行中自动展开工具步骤（完成即收）——终端流式观感在卡片 GUI 里的等价物
   const autoExpandRunningTurns = useAtomValue(autoExpandRunningTurnsAtom)
   // 工具步骤下方显示输出前几行（Claude Code 同款）
@@ -1159,8 +1166,24 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
       })
     }
 
+    // ------------------------------------------------------------------
+    // 合并代码视图的一次性引用（不落标注、不留高亮，发送即弃）。
+    // note 留空——问题写在输入框正文里，引用本身只提供"看哪段代码"的上下文。
+    // ------------------------------------------------------------------
+    for (const quote of transientQuotes) {
+      pending.push({
+        messageId: quote.filePath,
+        annotationId: quote.id,
+        note: '',
+        selectedText: quote.text,
+        createdAt: quote.createdAt,
+        sourceLabel: quote.label,
+        transientQuoteId: quote.id,
+      })
+    }
+
     return pending.sort((a, b) => a.createdAt - b.createdAt)
-  }, [session?.messages, previewPendingRaw])
+  }, [session?.messages, previewPendingRaw, transientQuotes])
 
   const followUpInputItems = useMemo(() => {
     return pendingFollowUpAnnotations.map((followUp, idx) => ({
@@ -1168,7 +1191,11 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
       messageId: followUp.messageId,
       annotationId: followUp.annotationId,
       index: idx + 1,
-      noteLabel: normalizeFollowUpText(followUp.note),
+      // 代码引用没有备注——chip 上改显示来源标签（文件名:行号），
+      // 比显示一段代码首行更容易一眼认出引的是哪儿
+      noteLabel: normalizeFollowUpText(followUp.note) || followUp.sourceLabel || '',
+      // 一次性引用可直接丢弃；标注类的要走标注本身，不在 chip 上删
+      removable: !!followUp.transientQuoteId,
       selectedText: truncateForChipTooltip(followUp.selectedText, 260),
       color: followUp.color,
     }))
@@ -1321,8 +1348,12 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     // clears these markers and the annotation becomes pending again.
     if (session && pendingFollowUpAnnotations.length > 0) {
       const sentAt = Date.now()
-      const messageItems = pendingFollowUpAnnotations.filter(f => !f.previewFilePath)
-      const previewItems = pendingFollowUpAnnotations.filter(f => f.previewFilePath)
+      // 三类分流：一次性代码引用无处可"标记已发"，直接整队清空即可
+      const transientItems = pendingFollowUpAnnotations.filter(f => f.transientQuoteId)
+      const messageItems = pendingFollowUpAnnotations.filter(f => !f.previewFilePath && !f.transientQuoteId)
+      const previewItems = pendingFollowUpAnnotations.filter(f => f.previewFilePath && !f.transientQuoteId)
+
+      if (transientItems.length > 0) clearTransientQuotes()
 
       // preview follow-ups → 渲染层 store（无会话消息可挂，后端会拒绝非消息标注）
       markPreviewFollowUpsSent(
@@ -1591,6 +1622,14 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   // 直接依赖会打穿 TurnCard memo 并触发 Markdown 组件表重建（预览块闪烁回归）。
   const onSendMessageRef = React.useRef(onSendMessage)
   onSendMessageRef.current = onSendMessage
+  // 丢弃一条代码引用（chip 上的 ✕）。annotationId 对一次性引用就是 quote id。
+  const handleFollowUpRemove = useCallback(
+    (item: { annotationId: string }) => {
+      removeTransientQuote(item.annotationId)
+    },
+    [removeTransientQuote],
+  )
+
   const handleVizFollowUp = useCallback((prompt: string) => {
     onSendMessageRef.current(prompt)
   }, [])
@@ -2170,6 +2209,7 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
               followUpItems: followUpInputItems,
               onFollowUpClick: handleFollowUpChipClick,
               onFollowUpIndexClick: handleFollowUpIndexClick,
+              onFollowUpRemove: handleFollowUpRemove,
             }}
           />
           </div>

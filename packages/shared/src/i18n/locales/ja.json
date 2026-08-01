@@ -745,6 +745,7 @@
   "preview.markdownPreview": "Markdownプレビュー",
   "preview.parseError": "解析エラー",
   "preview.pdfPreview": "PDFプレビュー",
+  "preview.quoteToChat": "チャットで引用",
   "projectInfo.assetUploaded": "{{name}} をアップロードしました",
   "projectInfo.color": "カラー",
   "projectInfo.colorClear": "クリア",

@@ -33,10 +33,13 @@ import { useAtom } from 'jotai'
 import { FileText, X, RotateCw, FolderSearch, Maximize2, GitCompare, Eye, EyeOff, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { createPatch } from 'diff'
-import { Markdown, UnifiedDiffViewer, AnnotatableMarkdownDocument } from '@craft-agent/ui'
+import { Markdown, UnifiedDiffViewer, AnnotatableMarkdownDocument, ShikiCodeViewer, classifyFile } from '@craft-agent/ui'
+import { useTheme } from '@/hooks/useTheme'
 import { usePreviewAnnotations } from '../../atoms/preview-annotations'
 import { usePreviewReadingMode } from '../../atoms/preview-reading-mode'
 import { OutlineRail } from './OutlineRail'
+import { CodeQuoteLayer } from './CodeQuoteLayer'
+import { useTransientQuotes } from '@/atoms/transient-quotes'
 import { MarkdownSourceEditor } from './MarkdownSourceEditor'
 import { cn } from '@/lib/utils'
 import { focusedSessionIdAtom } from '@/atoms/panel-stack'
@@ -104,6 +107,23 @@ function PreviewPanelContent({
   // ── 注解 hook：无条件调用（React rules of hooks）──────────────────────────
   // previewFilePath 随 activeTab 变化；hook 内部 useMemo 保证引用稳定
   const previewFilePath = activeTab?.filePath ?? ''
+  // markdown 走文档渲染（标注/大纲/阅读模式都基于它），其余走语法高亮只读视图。
+  // 判定放在这里作为单一真相，下面所有 md 专属 UI 都由它闸门。
+  const isMarkdownTab = /\.(md|mdx|markdown)$/i.test(previewFilePath)
+  const { isDark } = useTheme()
+
+  // 代码引用：选中片段 → 存进本会话的一次性引用队列（不落盘、不留高亮），
+  // 由 ChatDisplay 显示成输入框上方的 chip，随下一条消息发出后即清空。
+  const { add: addTransientQuote } = useTransientQuotes(sessionId)
+  const handleQuoteCode = React.useCallback(
+    ({ text, startLine, endLine }: { text: string; startLine: number; endLine: number }) => {
+      const name = previewFilePath.split('/').pop() ?? previewFilePath
+      const lineSuffix =
+        startLine > 0 ? (startLine === endLine ? `:${startLine}` : `:${startLine}-${endLine}`) : ''
+      addTransientQuote({ filePath: previewFilePath, label: `${name}${lineSuffix}`, text })
+    },
+    [previewFilePath, addTransientQuote]
+  )
   const [previewAnnotations, previewAnnoActions] = usePreviewAnnotations(sessionId, previewFilePath)
   // 阅读模式：全局视图开关，隐藏所有高亮批注（纯视觉，不影响追问发送）
   const [readingMode, toggleReadingMode] = usePreviewReadingMode()
@@ -323,16 +343,19 @@ function PreviewPanelContent({
     if (files.length === 0) return
     const getPath = window.electronAPI.getFilePath
     if (!getPath) return
-    const mdPaths: string[] = []
+    // 拖入过滤：接受面板能渲染的文本类文件（markdown 走文档渲染，其余走语法高亮）；
+    // 图片/PDF/二进制仍然拒收——它们在面板里没有可读形态。
+    const paths: string[] = []
     for (const f of files) {
-      if (!/\.(md|mdx|markdown)$/i.test(f.name)) continue
+      if (!classifyFile(f.name).canPreview) continue
+      if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif|pdf)$/i.test(f.name)) continue
       const p = getPath(f)
-      if (p) mdPaths.push(p)
+      if (p) paths.push(p)
     }
-    if (mdPaths.length === 0) return
+    if (paths.length === 0) return
     setState((prev) => {
       let next = prev
-      for (const p of mdPaths) {
+      for (const p of paths) {
         next = openSidebarDocTab(next, p)
       }
       return next
@@ -500,8 +523,10 @@ function PreviewPanelContent({
           )}
           {activeTab && !isEditing && (
             <>
-              {/* 进入编辑模式（diff 视图下不可用——先切回渲染视图） */}
-              {!showDiff && (
+              {/* 进入编辑模式（diff 视图下不可用——先切回渲染视图）。
+                  代码文件暂不开放：编辑器目前写死 markdown 语法高亮，
+                  用它编辑 .py 会看到错误的着色（待接入按语言的高亮后开放）。 */}
+              {!showDiff && isMarkdownTab && (
                 <button
                   onClick={startEdit}
                   disabled={!!isLoading}
@@ -519,7 +544,7 @@ function PreviewPanelContent({
                   className={`p-1 rounded-[6px] transition-colors ${
                     showDiff ? 'text-foreground bg-foreground/10' : 'text-muted-foreground/50 hover:text-foreground'
                   }`}
-                  title={showDiff ? 'Show rendered markdown' : 'Show changes vs previous version'}
+                  title={showDiff ? 'Show file' : 'Show changes vs previous version'}
                 >
                   <GitCompare className="w-3.5 h-3.5" />
                 </button>
@@ -606,7 +631,8 @@ function PreviewPanelContent({
             <div>
               <FileText className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
               <p className="text-xs text-muted-foreground/60 mb-3">
-                Pick an <span className="font-mono">.md</span> file to preview it here.
+                Pick a file to preview it here — <span className="font-mono">.md</span> renders as a
+                document, code files show with syntax highlighting.
               </p>
               {/* One-click entry to the floating Info popover so the user doesn't
                  have to backtrack through the toolbar on first use. */}
@@ -656,7 +682,20 @@ function PreviewPanelContent({
                 {error}
               </div>
             )}
-            {!isLoading && !showDiff && (
+            {/* 代码/文本文件：语法高亮只读视图。绝不能走下面的 markdown 渲染分支——
+                源码会被 markdown 解析器吃掉（# 变标题、缩进变代码块、* 变斜体）。
+                标注同理关闭：它锚定在渲染后的文本坐标系上，对高亮切分过的源码不可靠。 */}
+            {!isLoading && !showDiff && !isMarkdownTab && (
+              <CodeQuoteLayer filePath={previewFilePath} onQuote={handleQuoteCode}>
+                <ShikiCodeViewer
+                  code={content}
+                  filePath={previewFilePath}
+                  theme={isDark ? 'dark' : 'light'}
+                  className="text-xs"
+                />
+              </CodeQuoteLayer>
+            )}
+            {!isLoading && !showDiff && isMarkdownTab && (
               <div className="text-sm">
                 {previewFilePath && sessionId && !readingMode ? (
                   <AnnotatableMarkdownDocument
@@ -699,8 +738,9 @@ function PreviewPanelContent({
           </div>
         )}
       </div>
-      {/* 大纲导航：diff / 加载中 / 空状态 / 编辑中不显示；数据从渲染后 DOM 扫描 */}
-      {activeTab && !showDiff && !isLoading && !isEditing && (
+      {/* 大纲导航：diff / 加载中 / 空状态 / 编辑中不显示；代码文件没有 markdown 标题，
+          扫出来必然为空，直接不挂载省掉一次无用的 DOM 扫描 */}
+      {activeTab && isMarkdownTab && !showDiff && !isLoading && !isEditing && (
         <OutlineRail
           scrollRef={scrollContainerRef}
           content={content}

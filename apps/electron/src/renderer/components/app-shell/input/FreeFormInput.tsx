@@ -11,6 +11,7 @@ import {
   ChevronUp,
   AlertCircle,
   Image as ImageIcon,
+  X,
 } from 'lucide-react'
 import { Icon_Home, Spinner } from '@craft-agent/ui'
 
@@ -126,6 +127,8 @@ export interface FollowUpInputItem {
   noteLabel: string
   selectedText: string
   color?: string
+  /** 可直接丢弃（代码引用等一次性项）——标注类的 follow-up 删除要走标注本身，不在这里。 */
+  removable?: boolean
 }
 
 export interface FreeFormInputProps {
@@ -220,6 +223,8 @@ export interface FreeFormInputProps {
   onFollowUpClick?: (item: FollowUpInputItem, anchor?: { x: number; y: number }) => void
   /** Callback when user clicks the follow-up index badge */
   onFollowUpIndexClick?: (item: FollowUpInputItem) => void
+  /** 丢弃一条可移除的引用（chip 上的 ✕）。 */
+  onFollowUpRemove?: (item: FollowUpInputItem) => void
   /**
    * Compact-footer layout. Used by EditPopover (popover embedding) and by
    * ChatPage in auto-compact / WebUI mobile mode. The popover case hides the
@@ -301,6 +306,7 @@ export function FreeFormInput({
   followUpItems = [],
   onFollowUpClick,
   onFollowUpIndexClick,
+  onFollowUpRemove,
   compactMode = false,
   enableCompactModelPicker = false,
   currentConnection,
@@ -1821,6 +1827,35 @@ export function FreeFormInput({
                             <span className="mx-1 text-foreground/40">·</span>
                             <span>{noteExcerpt}</span>
                           </span>
+                          {/* 丢弃这条引用（一次性引用专有；标注类的删除要走标注本身）。
+                              整个 chip 是 button，故 ✕ 用 span + stopPropagation 避免嵌套按钮。 */}
+                          {item.removable && onFollowUpRemove && (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              aria-label={t('common.remove')}
+                              title={t('common.remove')}
+                              className="ml-0.5 grid h-4 w-4 shrink-0 cursor-pointer place-items-center rounded-[4px] text-foreground/40 transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              onMouseDown={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                              }}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                onFollowUpRemove(item)
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault()
+                                  event.stopPropagation()
+                                  onFollowUpRemove(item)
+                                }
+                              }}
+                            >
+                              <X className="h-3 w-3" strokeWidth={2.5} />
+                            </span>
+                          )}
                         </motion.button>
                       )
                     })}
