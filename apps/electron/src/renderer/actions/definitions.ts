@@ -214,6 +214,23 @@ export const actions = {
     category: 'Chat',
   },
 
+  'chat.prevPrompt': {
+    id: 'chat.prevPrompt',
+    label: 'Previous Prompt',
+    description: 'Jump to the previous message you sent',
+    defaultHotkey: 'mod+up',
+    category: 'Chat',
+    when: '!inputFocus',  // CMD+Up = cursor to start in text inputs
+  },
+  'chat.nextPrompt': {
+    id: 'chat.nextPrompt',
+    label: 'Next Prompt',
+    description: 'Jump to the next message you sent',
+    defaultHotkey: 'mod+down',
+    category: 'Chat',
+    when: '!inputFocus',  // CMD+Down = cursor to end in text inputs
+  },
+
 } as const satisfies Record<string, ActionDefinition>
 
 // Type-safe action IDs

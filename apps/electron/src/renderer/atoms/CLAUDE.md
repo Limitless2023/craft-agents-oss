@@ -16,6 +16,8 @@ preview-reading-mode.ts: Preview 面板「阅读模式」全局开关（隐藏/�
 
 preview-outline-pinned.ts: Preview 大纲「固定」布局偏好，atomWithStorage `craft-preview-outline-pinned-v1` + usePreviewOutlinePinned hook——持久（对照阅读是工作习惯，跨重启保留，与临时的 reading-mode 相反）
 
+prompt-rail-pinned.ts: 聊天区「指令导航」固定偏好，atomWithStorage `craft-prompt-rail-pinned-v1` + usePromptRailPinned hook——与 preview-outline-pinned 是镜像孪生（右缘文档大纲 / 左缘会话大纲），刻意分开存以便只钉一侧
+
 browser-pane.ts: 浏览器 overlay 状态
 
 info-popover.ts: Info panel 展开/收起状态

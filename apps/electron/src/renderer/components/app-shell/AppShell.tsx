@@ -1433,6 +1433,14 @@ function AppShellContent({
     enabled: () => searchActive && (chatMatchInfo.count ?? 0) > 0
   })
 
+  // 指令导航（CMD+↑ 上一条 / CMD+↓ 下一条我发过的消息）
+  useAction('chat.prevPrompt', () => chatDisplayRef.current?.goToPrevPrompt(), {
+    enabled: () => (chatDisplayRef.current?.promptCount ?? 0) > 1
+  })
+  useAction('chat.nextPrompt', () => chatDisplayRef.current?.goToNextPrompt(), {
+    enabled: () => (chatDisplayRef.current?.promptCount ?? 0) > 1
+  })
+
   // ESC to stop processing - requires double-press within 1 second
   // First press shows warning overlay, second press interrupts
   // In multi-panel, targets the focused panel's session

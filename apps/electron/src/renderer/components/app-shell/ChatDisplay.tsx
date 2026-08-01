@@ -72,6 +72,8 @@ import { useNavigation } from "@/contexts/NavigationContext"
 import { useAppShellContext } from "@/context/AppShellContext"
 import { navigate, routes } from "@/lib/navigate"
 import { CHAT_LAYOUT } from "@/config/layout"
+import { PromptRail } from "./PromptRail"
+import { promptLabel, type PromptRailItem } from "./prompt-rail-core"
 import { collectFileChangesFromActivities, getFirstFileChangeIdForActivity } from "@/lib/file-changes"
 import { resolveBranchNewPanelOption } from "./branching"
 import { handleErrorMessageAction } from "./error-message-actions"
@@ -263,6 +265,11 @@ export interface ChatDisplayHandle {
   matchCount: number
   currentMatchIndex: number
   isHighlighting: boolean
+  /** 跳到上/下一条用户指令（⌘↑ / ⌘↓）。 */
+  goToPrevPrompt: () => void
+  goToNextPrompt: () => void
+  /** 本会话的指令条数——快捷键的启用条件。 */
+  promptCount: number
 }
 
 /**
@@ -986,12 +993,23 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   const isHighlighting = false
 
   // Expose navigation via imperative handle (for session list navigation controls)
+  // 指令导航经 ref 中转：它的实现依赖 allTurns（在本 hook 之后才派生），
+  // 且 promptCount 用 getter 保证 enabled 判定读到的永远是最新值。
+  const promptNavRef = React.useRef<{ prev: () => void; next: () => void; count: number }>({
+    prev: () => {},
+    next: () => {},
+    count: 0,
+  })
+
   React.useImperativeHandle(ref, () => ({
     goToNextMatch,
     goToPrevMatch,
     matchCount: validMatches.length,
     currentMatchIndex,
     isHighlighting,
+    goToPrevPrompt: () => promptNavRef.current.prev(),
+    goToNextPrompt: () => promptNavRef.current.next(),
+    get promptCount() { return promptNavRef.current.count },
   }), [goToNextMatch, goToPrevMatch, validMatches.length, currentMatchIndex])
 
   // Notify parent when match info (count, index, highlighting state) changes
@@ -1450,15 +1468,38 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   const turns = allTurns.slice(startIndex)
   const hasMoreAbove = startIndex > 0
 
+  // 助手回复 + 用户指令统一索引：跳转能力对两类消息对称
+  // （收藏/follow-up 传助手 messageId，PromptRail 传用户 messageId）
   const assistantTurnIndexByMessageId = useMemo(() => {
     const map = new Map<string, number>()
     allTurns.forEach((turn, index) => {
-      if (turn.type !== 'assistant') return
-      const messageId = turn.response?.messageId
-      if (messageId) map.set(messageId, index)
+      if (turn.type === 'assistant') {
+        const messageId = turn.response?.messageId
+        if (messageId) map.set(messageId, index)
+      } else if (turn.type === 'user') {
+        map.set(turn.message.id, index)
+      }
     })
     return map
   }, [allTurns])
+
+  // 会话大纲条目：每条用户指令一行。数据从消息数组派生而非扫 DOM——
+  // 聊天是反向分页的，历史消息根本没挂载。
+  const promptItems = useMemo<PromptRailItem[]>(() => {
+    const items: PromptRailItem[] = []
+    allTurns.forEach((turn, turnIndex) => {
+      if (turn.type !== 'user') return
+      const label = promptLabel(typeof turn.message.content === 'string' ? turn.message.content : '')
+      if (!label) return
+      items.push({ messageId: turn.message.id, label, turnIndex })
+    })
+    return items
+  }, [allTurns])
+
+  const getPromptTurnNode = useCallback(
+    (messageId: string) => turnRefs.current.get(`user-${messageId}`) ?? null,
+    [],
+  )
 
   const scrollToMessage = useCallback((messageId: string) => {
     const targetTurnIndex = assistantTurnIndexByMessageId.get(messageId)
@@ -1503,6 +1544,37 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
     (item: { messageId: string; annotationId: string }) => scrollToMessage(item.messageId),
     [scrollToMessage],
   )
+
+  // ── 指令导航（PromptRail + ⌘↑/⌘↓）──
+  // 游标存 ref 而非 state：它每次滚动都可能变，进 state 会让整个聊天区重渲染。
+  const activePromptIdxRef = React.useRef(0)
+  // 跳转锁：smooth 滚动途中 scrollspy 会扫过中间条目，若让它回写游标，
+  // 连按 ⌘↓ 会原地打转。跳转后短暂忽略上报，等滚动落定。
+  const promptJumpLockUntilRef = React.useRef(0)
+
+  const handleActivePromptChange = useCallback((idx: number) => {
+    if (Date.now() < promptJumpLockUntilRef.current) return
+    activePromptIdxRef.current = idx
+  }, [])
+
+  const jumpToPrompt = useCallback((messageId: string) => {
+    scrollToMessage(messageId)
+    setHighlightMessageId(messageId)
+  }, [scrollToMessage])
+
+  const stepPrompt = useCallback((delta: number) => {
+    if (promptItems.length === 0) return
+    const next = Math.max(0, Math.min(promptItems.length - 1, activePromptIdxRef.current + delta))
+    const item = promptItems[next]
+    if (!item) return
+    activePromptIdxRef.current = next
+    promptJumpLockUntilRef.current = Date.now() + 600
+    jumpToPrompt(item.messageId)
+  }, [promptItems, jumpToPrompt])
+
+  const goToPrevPrompt = useCallback(() => stepPrompt(-1), [stepPrompt])
+  const goToNextPrompt = useCallback(() => stepPrompt(1), [stepPrompt])
+  promptNavRef.current = { prev: goToPrevPrompt, next: goToNextPrompt, count: promptItems.length }
 
   // G8：viz 组件确认后的追问发送——直接走本会话的 onSendMessage（与手打消息同一管线，
   // 排队/流式行为一致）。确认 UI 在 MarkdownVizBlock（S6 红线在 ui 层守）。
@@ -1585,10 +1657,22 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
           {/* Content layer */}
           <div className="flex flex-1 flex-col min-h-0 min-w-0 relative z-10">
           {/* === MESSAGES AREA: Scrollable list of message bubbles === */}
-          <div className="relative flex-1 min-h-0">
+          {/* flex 容器：PromptRail 固定态作为流内左列占位，悬浮态 absolute 出流 */}
+          <div className="relative flex-1 min-h-0 flex">
+            {/* 会话大纲（本会话我发过的指令）。窄面板隐藏——没有左缘空间可让。
+                刻意挂在 mask 之外：mask 会把顶底 32px 渐隐，浮层放进去会被裁。 */}
+            {!compactMode && (
+              <PromptRail
+                items={promptItems}
+                scrollRef={scrollViewportRef}
+                getTurnNode={getPromptTurnNode}
+                onJump={jumpToPrompt}
+                onActiveChange={handleActivePromptChange}
+              />
+            )}
             {/* Mask wrapper - fades content at top and bottom over transparent/image backgrounds */}
             <div
-              className="h-full"
+              className="h-full flex-1 min-w-0"
               style={{
                 maskImage: 'linear-gradient(to bottom, transparent 0%, black 32px, black calc(100% - 32px), transparent 100%)',
                 WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 32px, black calc(100% - 32px), transparent 100%)'
@@ -1704,6 +1788,8 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                     // User turns - render with MemoizedMessageBubble
                     // Extra padding creates visual separation from AI responses
                     if (turn.type === 'user') {
+                      // 指令导航跳转后的落点反馈（与助手消息的收藏跳转同款 ring）
+                      const isPromptHighlight = highlightMessageId != null && turn.message.id === highlightMessageId
                       return (
                         <div
                           key={turnKey}
@@ -1712,7 +1798,8 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                             compactMode ? "pt-2 pb-1" : CHAT_LAYOUT.userMessagePadding,
                             "rounded-lg transition-all duration-200",
                             isCurrentMatch && "ring-2 ring-info ring-offset-2 ring-offset-background",
-                            isAnyMatch && !isCurrentMatch && "ring-1 ring-info/30"
+                            isAnyMatch && !isCurrentMatch && "ring-1 ring-info/30",
+                            isPromptHighlight && "ring-2 ring-primary ring-offset-2 ring-offset-background"
                           )}
                         >
                           <MemoizedMessageBubble

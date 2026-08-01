@@ -205,6 +205,23 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 
+### Prompt Rail — 会话指令导航（左缘会话大纲）
+
+聊天区左缘的"我在这个会话发过的指令"导航，是 Preview `OutlineRail` 的**镜像孪生**（右缘扫文档标题 / 左缘列会话指令），双形态一致：悬浮态 = 左缘一列小横条（scrollspy 加深当前条）+ 悬停向右展开 260px 浮层；固定态 = Pin 后变 200px 常驻左列（流内 flex 兄弟，滚动区自动让位），偏好持久化（`atoms/prompt-rail-pinned.ts`，localStorage `craft-prompt-rail-pinned-v1`，与 Preview 大纲的 pin 分开存）。**⌘↑ / ⌘↓ 跳上/下一条指令**（`chat.prevPrompt`/`chat.nextPrompt`，`when: '!inputFocus'` 让输入框内保持原生"移到首/末"语义，与既有 `mod+left/right` 同一范式）。点击/快捷键跳转后目标消息亮 2s ring（复用收藏跳转的高亮机制，本次把它从"仅助手消息"扩到用户消息）。
+
+关键设计（与 OutlineRail 的本质差异）：
+1. **数据源是消息数组不是 DOM**——聊天是反向分页的（`TURNS_PER_PAGE=20` 只挂载尾部），扫 DOM 会漏掉全部历史指令；因此 scrollspy 对"未挂载节点"按**已滚过**处理（分页只可能缺前面的）。
+2. **跳转白捡**：`ChatDisplay.scrollToMessage` 本就内置"撑开分页 → 双 rAF → 80ms 兜底重试"，只需把它的索引从"仅助手消息"扩成 user+assistant 合并（`assistantTurnIndexByMessageId` 现收两类）。
+3. **单一 scrollspy**：⌘↑↓ 的游标与 rail 高亮共用一份定位（rail 经 `onActiveChange` 上报，ChatDisplay 存 ref），避免两套定位漂移；跳转后 600ms 锁忽略上报，否则 smooth 滚动途中的中间态会让连按原地打转。
+4. 标题提取 `promptLabel`：剥应用注入的内部标记（edit_request/context 连内容整段剥）→ 其余标签只去尖括号保留文字（用户可能在讲代码）→ 取首个有内容行 → 压空白截断 64 字。
+5. 窄面板（`compactMode`）不渲染——没有左缘空间可让。
+
+**New files:** `app-shell/{PromptRail.tsx, prompt-rail-core.ts, __tests__/prompt-rail-core.test.ts}`、`atoms/prompt-rail-pinned.ts`
+
+**Modified files:** `ChatDisplay.tsx`（合并索引 + promptItems 派生 + 跳转/游标/快捷键 handle + 用户消息高亮 + 布局 flex 挂载）、`actions/definitions.ts`（两个 action）、`AppShell.tsx`（useAction 接线）、7× i18n（`promptRail.*` 3 键）。
+
+**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.
