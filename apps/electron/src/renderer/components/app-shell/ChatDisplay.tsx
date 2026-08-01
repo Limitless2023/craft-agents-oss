@@ -1506,12 +1506,13 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
 
   // G8：viz 组件确认后的追问发送——直接走本会话的 onSendMessage（与手打消息同一管线，
   // 排队/流式行为一致）。确认 UI 在 MarkdownVizBlock（S6 红线在 ui 层守）。
-  const handleVizFollowUp = useCallback(
-    (prompt: string) => {
-      onSendMessage(prompt)
-    },
-    [onSendMessage],
-  )
+  // 经 ref 转发保持回调身份恒定：onSendMessage prop 每次发送后都会换身份，
+  // 直接依赖会打穿 TurnCard memo 并触发 Markdown 组件表重建（预览块闪烁回归）。
+  const onSendMessageRef = React.useRef(onSendMessage)
+  onSendMessageRef.current = onSendMessage
+  const handleVizFollowUp = useCallback((prompt: string) => {
+    onSendMessageRef.current(prompt)
+  }, [])
 
   const handleFollowUpChipClick = useCallback((item: {
     messageId: string

@@ -140,8 +140,15 @@ function createComponents(
   firstMermaidCodeRef?: React.RefObject<string | null>,
   hideFirstMermaidExpand: boolean = true,
   disablePreviewBlocks?: ReadonlySet<DisablablePreviewBlock>,
-  onVizFollowUp?: (prompt: string) => void | Promise<void>,
+  // ref 而非裸回调（与 firstMermaidCodeRef 同因）：进 memo 依赖会让回调身份
+  // 变化时整个组件表重建 → 所有 fence 块（文档预览/viz/mermaid）卸载重挂，
+  // 表现为发消息时上一条回复里的预览块闪"加载中"。
+  onVizFollowUpRef?: React.MutableRefObject<((prompt: string) => void | Promise<void>) | undefined>,
 ): Partial<Components> {
+  // 稳定包装：按调用时的 ref.current 转发；ref.current 为空时视为不支持追问。
+  const vizFollowUpViaRef = onVizFollowUpRef
+    ? (prompt: string) => onVizFollowUpRef.current?.(prompt)
+    : undefined
   const isPreviewEnabled = (name: DisablablePreviewBlock) => !disablePreviewBlocks?.has(name)
   let blockIndex = 0
   const wrapBlock = (
@@ -304,7 +311,7 @@ function createComponents(
           }
           // 交互可视化块 → 沙箱 iframe（allow-scripts，断网，主题跟随）
           if (match?.[1] === 'viz' && isPreviewEnabled('viz')) {
-            return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} onFollowUp={onVizFollowUp} />, props.node?.position)
+            return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} onFollowUp={onVizFollowUpRef?.current ? vizFollowUpViaRef : undefined} />, props.node?.position)
           }
           // PDF preview blocks → inline first page with expand to full viewer
           if (match?.[1] === 'pdf-preview' && isPreviewEnabled('pdf-preview')) {
@@ -446,7 +453,7 @@ function createComponents(
         }
         // 交互可视化块 → 沙箱 iframe（allow-scripts，断网，主题跟随）
         if (match?.[1] === 'viz' && isPreviewEnabled('viz')) {
-          return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} onFollowUp={onVizFollowUp} />, props.node?.position)
+          return wrapBlock('viz', code, <MarkdownVizBlock code={code} className="my-2" onFileClick={onFileClick} onFollowUp={onVizFollowUpRef?.current ? vizFollowUpViaRef : undefined} />, props.node?.position)
         }
         // PDF preview blocks → inline first page with expand to full viewer
         if (match?.[1] === 'pdf-preview' && isPreviewEnabled('pdf-preview')) {
@@ -591,6 +598,9 @@ export function Markdown({
   disablePreviewBlocks,
   onVizFollowUp,
 }: MarkdownProps) {
+  // 每次渲染刷新 ref，组件表 memo 不感知回调身份变化（防 fence 块重挂）
+  const onVizFollowUpRef = React.useRef(onVizFollowUp)
+  onVizFollowUpRef.current = onVizFollowUp
   // Get collapsible context if enabled
   const collapsibleContext = useCollapsibleMarkdown()
 
@@ -608,8 +618,9 @@ export function Markdown({
   }
 
   const components = React.useMemo(
-    () => wrapWithSafeProxy(createComponents(mode, onUrlClick, onFileClick, collapsible ? collapsibleContext : null, firstMermaidCodeRef, hideFirstMermaidExpand, disablePreviewBlocks, onVizFollowUp)),
-    [mode, onUrlClick, onFileClick, collapsible, collapsibleContext, hideFirstMermaidExpand, disablePreviewBlocks, onVizFollowUp]
+    () => wrapWithSafeProxy(createComponents(mode, onUrlClick, onFileClick, collapsible ? collapsibleContext : null, firstMermaidCodeRef, hideFirstMermaidExpand, disablePreviewBlocks, onVizFollowUpRef)),
+    // onVizFollowUp 刻意经 ref 传递、不进依赖——见 createComponents 参数注释
+    [mode, onUrlClick, onFileClick, collapsible, collapsibleContext, hideFirstMermaidExpand, disablePreviewBlocks]
   )
 
   // Preprocess to convert raw URLs and file paths to markdown links
