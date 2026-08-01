@@ -932,6 +932,8 @@
   "settings.appearance.defaultTheme": "Tema predeterminado",
   "settings.appearance.description": "Tema, fuente, iconos de herramientas",
   "settings.appearance.editFile": "Editar archivo",
+  "settings.appearance.expandLongResponses": "Expandir respuestas largas",
+  "settings.appearance.expandLongResponsesDesc": "Mostrar las respuestas completas en lugar de desplazarse dentro de la tarjeta. Ideal para pantallas grandes.",
   "settings.appearance.font": "Fuente",
   "settings.appearance.fontInter": "Inter",
   "settings.appearance.fontSystem": "Sistema",

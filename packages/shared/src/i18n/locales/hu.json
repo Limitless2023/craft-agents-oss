@@ -932,6 +932,8 @@
   "settings.appearance.defaultTheme": "Alapértelmezett téma",
   "settings.appearance.description": "Téma, betűtípus, eszközikonok",
   "settings.appearance.editFile": "Fájl szerkesztése",
+  "settings.appearance.expandLongResponses": "Hosszú válaszok kibontása",
+  "settings.appearance.expandLongResponsesDesc": "A válaszok teljes megjelenítése a kártyán belüli görgetés helyett. Nagy kijelzőkhöz ideális.",
   "settings.appearance.font": "Betűtípus",
   "settings.appearance.fontInter": "Inter",
   "settings.appearance.fontSystem": "Rendszer",

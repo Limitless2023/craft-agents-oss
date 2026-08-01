@@ -71,7 +71,9 @@ import { useTurnCardExpansion } from "@/hooks/useTurnCardExpansion"
 import { useNavigation } from "@/contexts/NavigationContext"
 import { useAppShellContext } from "@/context/AppShellContext"
 import { navigate, routes } from "@/lib/navigate"
+import { useAtomValue } from "jotai"
 import { CHAT_LAYOUT } from "@/config/layout"
+import { expandLongResponsesAtom } from "@/atoms/chat-response-height"
 import { PromptRail } from "./PromptRail"
 import { promptLabel, type PromptRailItem } from "./prompt-rail-core"
 import { collectFileChangesFromActivities, getFirstFileChangeIdForActivity } from "@/lib/file-changes"
@@ -611,6 +613,8 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
   // Favorites: jump + highlight state（effect 在 scrollToMessage 定义之后）
   // ------------------------------------------------------------
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
+  // 长回复展开偏好（Settings → Appearance）：大屏上让内容铺开，不在卡片内自成滚动区
+  const expandLongResponses = useAtomValue(expandLongResponsesAtom)
 
   // ============================================================================
   // Search Highlighting (from session list search)
@@ -1906,6 +1910,7 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                         onOpenFile={onOpenFile}
                         onOpenUrl={onOpenUrl}
                         onVizFollowUp={handleVizFollowUp}
+                        expandLongResponses={expandLongResponses}
                         isLastResponse={isLastResponse}
                         compactMode={compactMode}
                         sendMessageKey={sendMessageKey}

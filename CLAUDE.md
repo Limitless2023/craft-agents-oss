@@ -222,6 +222,17 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 
+### Expand Long Responses — 长回复完全展开（设置开关）
+
+上游的助手回复卡片写死 `MAX_HEIGHT = 540`（`TurnCard.tsx`），超出即在卡片内自成滚动区——大屏（外接显示器）上垂直空间充裕时反而割裂阅读（表格表头被卡在卡片外）。新增 **Settings → Appearance →「展开长回复」** 开关：开启后回复不限高、不内滚，由页面主滚动条承载；**默认关 = 保持上游行为**（窄屏/多面板下卡片限高仍有价值）。展开时**一并取消暗色模式的首尾渐隐遮罩**（无溢出还渐隐只会让首尾文字平白变淡）。
+
+偏好走 `atomWithStorage`（`atoms/chat-response-height.ts`，key `craft-expand-long-responses`），与上游 background-finished chip 开关同款：renderer-only、多窗口共享、不走 RPC/磁盘配置。跨包传递：ChatDisplay 读 atom → TurnCard `expandLongResponses` prop → 三处 ResponseCard 渲染点（两处正文 + plan）；`packages/ui` 侧默认 `false`，不影响其他调用方（webui 等）。
+
+**New files:** `atoms/chat-response-height.ts`
+**Modified files:** `packages/ui/chat/TurnCard.tsx`（两接口 + 两处限高样式 + 三处透传）、`ChatDisplay.tsx`（读 atom + 透传）、`pages/settings/AppearanceSettingsPage.tsx`（开关）、7× i18n（2 键）。
+
+**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

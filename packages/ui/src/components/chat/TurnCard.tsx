@@ -321,6 +321,8 @@ export interface TurnCardProps {
   onOpenUrl?: (url: string) => void
   /** G8：viz 块追问发送函数（会话作用域，ChatDisplay 绑定）。 */
   onVizFollowUp?: (prompt: string) => void | Promise<void>
+  /** 长回复完全展开（不限高、不内滚）——大屏偏好，见 expandLongResponsesAtom。 */
+  expandLongResponses?: boolean
   /** Callback to open response in Monaco editor */
   onPopOut?: (text: string) => void
   /** Callback to open turn details in a new window */
@@ -1400,6 +1402,8 @@ export interface ResponseCardProps {
   onOpenUrl?: (url: string) => void
   /** G8：viz 块追问发送函数。 */
   onVizFollowUp?: (prompt: string) => void | Promise<void>
+  /** 长回复完全展开（不限高、不内滚）。 */
+  expandLongResponses?: boolean
   /** Callback to open response in Monaco editor */
   onPopOut?: () => void
   /** Card variant - 'response' for AI messages, 'plan' for plan messages */
@@ -1665,6 +1669,7 @@ export function ResponseCard({
   onOpenFile,
   onOpenUrl,
   onVizFollowUp,
+  expandLongResponses = false,
   onPopOut,
   variant = 'response',
   sessionId,
@@ -2503,15 +2508,24 @@ export function ResponseCard({
             data-search-root="response"
             onMouseDown={handleSelectionPointerDown}
             onMouseUp={handleTextSelection}
-            className="pl-[22px] pr-[16px] py-3 text-sm overflow-y-auto scrollbar-hover"
-            style={{
-              maxHeight: MAX_HEIGHT,
-              // Subtle fade at top and bottom edges (16px) - only in dark mode for better contrast
-              ...(isDarkMode && {
-                maskImage: 'linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%)',
-                WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%)',
-              }),
-            }}
+            className={cn(
+              "pl-[22px] pr-[16px] py-3 text-sm",
+              // 展开模式下不再自成滚动区，由页面主滚动条承载
+              !expandLongResponses && "overflow-y-auto scrollbar-hover"
+            )}
+            style={
+              expandLongResponses
+                ? undefined
+                : {
+                    maxHeight: MAX_HEIGHT,
+                    // Subtle fade at top and bottom edges (16px) - only in dark mode for better contrast
+                    // （展开后无溢出，渐隐会平白让首尾文字变淡，故一并取消）
+                    ...(isDarkMode && {
+                      maskImage: 'linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%)',
+                      WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%)',
+                    }),
+                  }
+            }
           >
             <div ref={contentLayerRef} className="relative">
               <Markdown
@@ -2663,15 +2677,22 @@ export function ResponseCard({
           data-search-root="response"
           onMouseDown={handleSelectionPointerDown}
           onMouseUp={handleTextSelection}
-          className="pl-[22px] pr-4 py-3 text-sm overflow-y-auto scrollbar-hover"
-          style={{
-            maxHeight: MAX_HEIGHT,
-            // Subtle fade at top and bottom edges (16px) - only in dark mode for better contrast
-            ...(isDarkMode && {
-              maskImage: 'linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%)',
-            }),
-          }}
+          className={cn(
+            "pl-[22px] pr-4 py-3 text-sm",
+            !expandLongResponses && "overflow-y-auto scrollbar-hover"
+          )}
+          style={
+            expandLongResponses
+              ? undefined
+              : {
+                  maxHeight: MAX_HEIGHT,
+                  // Subtle fade at top and bottom edges (16px) - only in dark mode for better contrast
+                  ...(isDarkMode && {
+                    maskImage: 'linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%)',
+                  }),
+                }
+          }
         >
           <div ref={contentLayerRef} className="relative">
             <Markdown
@@ -2808,6 +2829,7 @@ export const TurnCard = React.memo(function TurnCard({
   onOpenFile,
   onOpenUrl,
   onVizFollowUp,
+  expandLongResponses,
   onPopOut,
   onOpenDetails,
   onOpenActivityDetails,
@@ -3178,6 +3200,7 @@ export const TurnCard = React.memo(function TurnCard({
             sessionId={sessionId}
             onOpenFile={onOpenFile}
             onOpenUrl={onOpenUrl}
+            expandLongResponses={expandLongResponses}
             onPopOut={onPopOut ? () => onPopOut(planActivity.content || '') : undefined}
             variant="plan"
             messageId={planActivity.messageId}
@@ -3218,6 +3241,7 @@ export const TurnCard = React.memo(function TurnCard({
                 onOpenFile={onOpenFile}
                 onOpenUrl={onOpenUrl}
                 onVizFollowUp={onVizFollowUp}
+                expandLongResponses={expandLongResponses}
                 onPopOut={onPopOut ? () => onPopOut(response.text) : undefined}
                 variant={response.isPlan ? 'plan' : 'response'}
                 messageId={response.messageId}
@@ -3253,6 +3277,7 @@ export const TurnCard = React.memo(function TurnCard({
             onOpenFile={onOpenFile}
             onOpenUrl={onOpenUrl}
             onVizFollowUp={onVizFollowUp}
+            expandLongResponses={expandLongResponses}
             onPopOut={onPopOut ? () => onPopOut(response.text) : undefined}
             variant={response.isPlan ? 'plan' : 'response'}
             messageId={response.messageId}

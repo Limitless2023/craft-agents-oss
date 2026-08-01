@@ -932,6 +932,8 @@
   "settings.appearance.defaultTheme": "Domyślny motyw",
   "settings.appearance.description": "Motyw, czcionka, ikony narzędzi",
   "settings.appearance.editFile": "Edytuj plik",
+  "settings.appearance.expandLongResponses": "Rozwijaj długie odpowiedzi",
+  "settings.appearance.expandLongResponsesDesc": "Pokazuj pełne odpowiedzi zamiast przewijania wewnątrz karty wiadomości. Najlepsze na dużych ekranach.",
   "settings.appearance.font": "Czcionka",
   "settings.appearance.fontInter": "Inter",
   "settings.appearance.fontSystem": "System",

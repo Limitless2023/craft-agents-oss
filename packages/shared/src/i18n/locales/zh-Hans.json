@@ -932,6 +932,8 @@
   "settings.appearance.defaultTheme": "默认主题",
   "settings.appearance.description": "主题、字体、工具图标",
   "settings.appearance.editFile": "编辑文件",
+  "settings.appearance.expandLongResponses": "展开长回复",
+  "settings.appearance.expandLongResponsesDesc": "完整显示回复内容，不在消息卡片内部滚动。大屏幕上更好用。",
   "settings.appearance.font": "字体",
   "settings.appearance.fontInter": "Inter",
   "settings.appearance.fontSystem": "系统",

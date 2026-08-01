@@ -932,6 +932,8 @@
   "settings.appearance.defaultTheme": "Standarddesign",
   "settings.appearance.description": "Design, Schrift, Werkzeugsymbole",
   "settings.appearance.editFile": "Datei bearbeiten",
+  "settings.appearance.expandLongResponses": "Lange Antworten ausklappen",
+  "settings.appearance.expandLongResponsesDesc": "Antworten vollständig anzeigen, statt in der Nachrichtenkarte zu scrollen. Ideal für große Displays.",
   "settings.appearance.font": "Schriftart",
   "settings.appearance.fontInter": "Inter",
   "settings.appearance.fontSystem": "System",

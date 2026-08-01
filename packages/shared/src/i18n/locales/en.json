@@ -932,6 +932,8 @@
   "settings.appearance.defaultTheme": "Default Theme",
   "settings.appearance.description": "Theme, font, tool icons",
   "settings.appearance.editFile": "Edit File",
+  "settings.appearance.expandLongResponses": "Expand long responses",
+  "settings.appearance.expandLongResponsesDesc": "Show replies in full instead of scrolling inside the message card. Best on large displays.",
   "settings.appearance.font": "Font",
   "settings.appearance.fontInter": "Inter",
   "settings.appearance.fontSystem": "System",
