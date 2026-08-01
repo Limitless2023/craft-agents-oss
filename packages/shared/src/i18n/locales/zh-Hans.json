@@ -1,6 +1,9 @@
 {
   "activity.command": "命令",
   "activity.inputParams": "输入参数",
+  "annotations.orphanedClear": "清除",
+  "annotations.orphanedNotice_one": "{{count}} 条标注已失效（原文已被修改）",
+  "annotations.orphanedNotice_other": "{{count}} 条标注已失效（原文已被修改）",
   "apiSetup.authorizationCode": "授权码",
   "apiSetup.credentials.environment": "环境 (AWS CLI)",
   "apiSetup.credentials.iam": "IAM 凭证",

@@ -1,6 +1,9 @@
 {
   "activity.command": "コマンド",
   "activity.inputParams": "入力パラメータ",
+  "annotations.orphanedClear": "クリア",
+  "annotations.orphanedNotice_one": "{{count}} 件のハイライトが対象を見失いました（本文が編集されました）",
+  "annotations.orphanedNotice_other": "{{count}} 件のハイライトが対象を見失いました（本文が編集されました）",
   "apiSetup.authorizationCode": "認証コード",
   "apiSetup.credentials.environment": "環境 (AWS CLI)",
   "apiSetup.credentials.iam": "IAM 認証情報",

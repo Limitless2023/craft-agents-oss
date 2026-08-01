@@ -1,6 +1,9 @@
 {
   "activity.command": "Polecenie",
   "activity.inputParams": "Parametry wejściowe",
+  "annotations.orphanedClear": "Wyczyść",
+  "annotations.orphanedNotice_one": "{{count}} zaznaczenie straciło kotwicę (tekst został zmieniony)",
+  "annotations.orphanedNotice_other": "{{count}} zaznaczeń straciło kotwice (tekst został zmieniony)",
   "apiSetup.authorizationCode": "Kod autoryzacyjny",
   "apiSetup.credentials.environment": "Środowisko (AWS CLI)",
   "apiSetup.credentials.iam": "Dane uwierzytelniające IAM",

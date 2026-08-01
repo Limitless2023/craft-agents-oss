@@ -1,6 +1,9 @@
 {
   "activity.command": "Parancs",
   "activity.inputParams": "Bemeneti paraméterek",
+  "annotations.orphanedClear": "Törlés",
+  "annotations.orphanedNotice_one": "{{count}} kiemelés elvesztette a horgonyát (a szöveg módosult)",
+  "annotations.orphanedNotice_other": "{{count}} kiemelés elvesztette a horgonyát (a szöveg módosult)",
   "apiSetup.authorizationCode": "Engedélyezési kód",
   "apiSetup.credentials.environment": "Környezet (AWS CLI)",
   "apiSetup.credentials.iam": "IAM hitelesítő adatok",

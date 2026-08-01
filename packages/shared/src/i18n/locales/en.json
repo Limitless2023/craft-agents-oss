@@ -1,6 +1,9 @@
 {
   "activity.command": "Command",
   "activity.inputParams": "Input Params",
+  "annotations.orphanedClear": "Clear",
+  "annotations.orphanedNotice_one": "{{count}} highlight lost its anchor (the text was edited)",
+  "annotations.orphanedNotice_other": "{{count}} highlights lost their anchors (the text was edited)",
   "apiSetup.authorizationCode": "Authorization Code",
   "apiSetup.credentials.environment": "Environment (AWS CLI)",
   "apiSetup.credentials.iam": "IAM Credentials",

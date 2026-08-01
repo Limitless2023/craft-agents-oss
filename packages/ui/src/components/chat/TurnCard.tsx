@@ -2169,18 +2169,21 @@ export function ResponseCard({
         return
       }
 
-      const selectedText = range.toString()
-      if (!selectedText || !/\S/.test(selectedText)) {
-        closeSelectionMenu()
-        return
-      }
-
       if (hasExistingTextRangeAnnotation(annotations, start, end)) {
         closeSelectionMenu()
         return
       }
 
+      // 引文必须取 canonical 切片而非 range.toString()：偏移/前后文都活在 canonical
+      // 坐标系里，toString 在跨节点选择（KaTeX 隐藏文本层、块边界）会产生差异文本，
+      // 存进去会让解析器的引文核对永远失败 → 错误重锚（"选一下把前面也选上"回归）。
       const fullText = getCanonicalText(root)
+      const selectedText = fullText.slice(start, end)
+      if (!selectedText || !/\S/.test(selectedText)) {
+        closeSelectionMenu()
+        return
+      }
+
       const prefix = fullText.slice(Math.max(0, start - ANNOTATION_PREFIX_SUFFIX_WINDOW), start)
       const suffix = fullText.slice(end, end + ANNOTATION_PREFIX_SUFFIX_WINDOW)
 

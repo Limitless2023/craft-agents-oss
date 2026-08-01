@@ -1,6 +1,9 @@
 {
   "activity.command": "Befehl",
   "activity.inputParams": "Eingabeparameter",
+  "annotations.orphanedClear": "Entfernen",
+  "annotations.orphanedNotice_one": "{{count}} Markierung hat ihren Anker verloren (Text wurde geändert)",
+  "annotations.orphanedNotice_other": "{{count}} Markierungen haben ihre Anker verloren (Text wurde geändert)",
   "apiSetup.authorizationCode": "Autorisierungscode",
   "apiSetup.credentials.environment": "Umgebung (AWS CLI)",
   "apiSetup.credentials.iam": "IAM-Anmeldedaten",

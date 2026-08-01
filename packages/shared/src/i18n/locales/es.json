@@ -1,6 +1,9 @@
 {
   "activity.command": "Comando",
   "activity.inputParams": "Parámetros de entrada",
+  "annotations.orphanedClear": "Borrar",
+  "annotations.orphanedNotice_one": "{{count}} resaltado perdió su ancla (el texto fue editado)",
+  "annotations.orphanedNotice_other": "{{count}} resaltados perdieron sus anclas (el texto fue editado)",
   "apiSetup.authorizationCode": "Código de autorización",
   "apiSetup.credentials.environment": "Entorno (AWS CLI)",
   "apiSetup.credentials.iam": "Credenciales IAM",

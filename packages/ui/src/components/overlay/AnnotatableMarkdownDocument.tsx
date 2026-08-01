@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
+import { AlertTriangle } from 'lucide-react'
 import { Markdown } from '../markdown'
 import type { AnnotationV1 } from '@craft-agent/core'
 import { type IslandTransitionConfig } from '../ui'
@@ -110,6 +112,9 @@ export function AnnotatableMarkdownDocument({
     buildAnnotationChipEntryTransition()
   )
   const [annotationOverlay, setAnnotationOverlay] = React.useState<{ rects: AnnotationOverlayRect[]; chips: AnnotationOverlayChip[] }>({ rects: [], chips: [] })
+  // 锚点自愈失败的"孤儿"标注 id：引文在当前文档里找不到了（原文被改/删）。
+  // 只认带文本选择器的标注——block 类标注天然走不通文本解析，不是失效。
+  const [orphanedIds, setOrphanedIds] = React.useState<string[]>([])
 
   const {
     renderAnchor: selectionMenuRenderAnchor,
@@ -172,13 +177,13 @@ export function AnnotatableMarkdownDocument({
     }
 
     const computeGeometry = () => {
-      if (!renderedAnnotations.length) return { rects: [], chips: [] }
+      if (!renderedAnnotations.length) return { rects: [], chips: [], unresolved: [] }
       const geometry = computeAnnotationOverlayGeometry({
         root,
         renderedAnnotations,
         persistedAnnotations: annotations,
       })
-      return { rects: geometry.rects, chips: geometry.chips }
+      return { rects: geometry.rects, chips: geometry.chips, unresolved: geometry.unresolved }
     }
 
     // Full recompute: rewrites block-marker DOM. Used for content/annotation changes.
@@ -187,6 +192,7 @@ export function AnnotatableMarkdownDocument({
 
       if (!renderedAnnotations.length) {
         setAnnotationOverlay({ rects: [], chips: [] })
+        setOrphanedIds(prev => (prev.length ? [] : prev))
         return
       }
 
@@ -194,13 +200,27 @@ export function AnnotatableMarkdownDocument({
       for (const annotation of renderedAnnotations) {
         applyBlockAnnotationMarker(root, annotation)
       }
-      setAnnotationOverlay(next)
+      setAnnotationOverlay({ rects: next.rects, chips: next.chips })
+      // 孤儿 = 文本类标注（有 text-quote/text-position 选择器）且解析失败。
+      // ephemeral 预览标注不算（选区还在屏上，谈不上失效）。
+      const orphans = next.unresolved
+        .filter(u => !u.annotation.meta?.ephemeral)
+        .filter(u =>
+          (u.annotation.target?.selectors ?? []).some(
+            s => s.type === 'text-quote' || s.type === 'text-position'
+          )
+        )
+        .map(u => u.annotation.id)
+      setOrphanedIds(prev =>
+        prev.length === orphans.length && prev.every((id, i) => id === orphans[i]) ? prev : orphans
+      )
     }
 
     // Fast path: coordinates only, no DOM mutation. Used by scroll/resize.
     const recomputeOverlayCoords = () => {
       if (!renderedAnnotations.length) return
-      setAnnotationOverlay(computeGeometry())
+      const next = computeGeometry()
+      setAnnotationOverlay({ rects: next.rects, chips: next.chips })
     }
 
     let rafId: number | null = null
@@ -373,13 +393,16 @@ export function AnnotatableMarkdownDocument({
         return
       }
 
-      const selectedText = range.toString()
+      // 引文必须取 canonical 切片而非 range.toString()：偏移/前后文都活在 canonical
+      // 坐标系里，toString 在跨节点选择（KaTeX 隐藏文本层、块边界）会产生差异文本，
+      // 存进去会让解析器的引文核对永远失败 → 错误重锚（"选一下把前面也选上"回归）。
+      const fullText = getCanonicalText(root)
+      const selectedText = fullText.slice(start, end)
       if (!selectedText || !/\S/.test(selectedText)) {
         closeSelectionMenu()
         return
       }
 
-      const fullText = getCanonicalText(root)
       const prefix = fullText.slice(Math.max(0, start - ANNOTATION_PREFIX_SUFFIX_WINDOW), start)
       const suffix = fullText.slice(end, end + ANNOTATION_PREFIX_SUFFIX_WINDOW)
 
@@ -643,6 +666,21 @@ export function AnnotatableMarkdownDocument({
 
   return (
     <>
+      {/* 失效标注提示条：引文在当前文档找不到（原文被改/删）。刻意渲染在
+          contentLayer 之外——canonical text 采集以 contentLayerRef 为根，
+          放进去会污染偏移坐标系。 */}
+      {orphanedIds.length > 0 && (
+        <OrphanedAnnotationsNotice
+          count={orphanedIds.length}
+          onClear={
+            onRemoveAnnotation
+              ? () => {
+                  for (const id of orphanedIds) onRemoveAnnotation(messageId, id)
+                }
+              : undefined
+          }
+        />
+      )}
       <div
         ref={contentLayerRef}
         className="relative"
@@ -665,5 +703,29 @@ export function AnnotatableMarkdownDocument({
       </div>
       {selectionMenu}
     </>
+  )
+}
+
+/**
+ * 失效标注提示条。锚点自愈（annotation-resolver 的引文核对 + 重定位）已尽力，
+ * 走到这里说明引文在当前文档确实不存在了——显式告知优于静默消失（错误的
+ * 沉默会让用户以为标注丢了或功能坏了）。提供"清除"直达（onClear 缺省时纯提示）。
+ */
+function OrphanedAnnotationsNotice({ count, onClear }: { count: number; onClear?: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <div className="mb-2 flex items-center gap-2 rounded-[8px] bg-amber-500/10 px-3 py-1.5 text-[12px] text-amber-700 dark:text-amber-300">
+      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+      <span className="flex-1">{t('annotations.orphanedNotice', { count })}</span>
+      {onClear && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="shrink-0 rounded-md px-1.5 py-0.5 font-medium transition-colors hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          {t('annotations.orphanedClear')}
+        </button>
+      )}
+    </div>
   )
 }

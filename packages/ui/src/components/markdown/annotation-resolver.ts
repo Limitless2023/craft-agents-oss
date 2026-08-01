@@ -133,14 +133,36 @@ export function resolveTextAnnotations(
       { type: 'text-position' }
     > | undefined
 
-    if (
-      position &&
+    const quote = selectors.find(s => s.type === 'text-quote') as Extract<
+      AnnotationV1['target']['selectors'][number],
+      { type: 'text-quote' }
+    > | undefined
+
+    const positionInBounds =
+      !!position &&
       Number.isInteger(position.start) &&
       Number.isInteger(position.end) &&
       position.start >= 0 &&
       position.end > position.start &&
       position.end <= fullText.length
-    ) {
+
+    // 偏移必须过"引文核对"才可信（锚点自愈的核心）：文件被改后偏移可能碰巧
+    // 仍在界内——不核对内容就采信会在旧位置错误高亮。存有引文时，偏移处文本
+    // 须与引文相等（允许空白归一化容差：历史标注的引文来自 range.toString()，
+    // 与 canonical 切片可能仅空白形态不同，不该被误判为漂移）。对不上才交给
+    // 引文重定位。无引文的历史标注保持旧行为（在界即信，宁可显示不静默丢）。
+    const positionVerified =
+      positionInBounds &&
+      (!quote?.exact ||
+        (() => {
+          const sliced = fullText.slice(position.start, position.end)
+          return (
+            sliced === quote.exact ||
+            normalizeWhitespaceWithMap(sliced).text === normalizeWhitespaceWithMap(quote.exact).text
+          )
+        })())
+
+    if (positionVerified) {
       resolved.push({
         annotation,
         range: { start: position.start, end: position.end },
@@ -148,11 +170,6 @@ export function resolveTextAnnotations(
       })
       continue
     }
-
-    const quote = selectors.find(s => s.type === 'text-quote') as Extract<
-      AnnotationV1['target']['selectors'][number],
-      { type: 'text-quote' }
-    > | undefined
 
     if (!quote?.exact) {
       unresolved.push({ annotation, reason: 'invalid-position' })
