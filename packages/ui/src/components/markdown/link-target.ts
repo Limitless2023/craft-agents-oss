@@ -8,6 +8,21 @@ function normalizeFileUrlPath(path: string): string {
   return /^\/[A-Za-z]:\//.test(path) ? path.slice(1) : path
 }
 
+/**
+ * Percent-decode a bare file path so a link destination with %20 (the only
+ * CommonMark-legal way to encode a space in a bare destination) resolves to the
+ * real on-disk path. No-op when there's no '%'; falls back to the raw string if
+ * the value isn't valid percent-encoding (#944).
+ */
+function decodeFilePath(path: string): string {
+  if (!path.includes('%')) return path
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
+}
+
 function resolveFileUrlPath(target: string): string | null {
   if (!/^file:/i.test(target)) return null
 
@@ -45,17 +60,14 @@ export function resolveMarkdownLinkTarget(target: string): ResolvedMarkdownLinkT
   }
 
   // Absolute or home-relative paths — always file links (handles spaces, unicode, etc.)
-  // Decode URI encoding (%20 → space, %E4%B8%AD → 中) since markdown renderers encode hrefs
+  // 解码交给 decodeFilePath（上游 #944 引入，与我们原先的定制等价但更严谨：
+  // 无 '%' 时零开销、非法编码回退原串），故此处不再自行 decodeURIComponent。
   if (trimmed.startsWith('/') || trimmed.startsWith('~/')) {
-    try {
-      return { kind: 'file', path: decodeURIComponent(trimmed) }
-    } catch {
-      return { kind: 'file', path: trimmed }
-    }
+    return { kind: 'file', path: decodeFilePath(trimmed) }
   }
 
   if (isFilePathTarget(trimmed)) {
-    return { kind: 'file', path: trimmed }
+    return { kind: 'file', path: decodeFilePath(trimmed) }
   }
 
   return { kind: 'url', url: trimmed }
