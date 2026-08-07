@@ -299,7 +299,11 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
-> Baseline as of 2026-08-04: local main merged up to upstream **v0.11.3** (2026-08-03) — 0 behind, 148 custom ahead. Merge commit `664071d1`, checkpoint 分支 `backup/main-pre-v0.11.3` @ 5360cd3b。**⭐ 两个修复直接命中我们的日常**：输入框不再强制首字母大写（此前破坏拼音/CJK 输入法连续输入）、含空格路径（`%20`）的本地文件链接恢复可用。另有 `archive_session` 会话工具（Agent 可归档他人会话，不能归档自己/跑动中的）+ **Agent SDK 0.3.197→0.3.220**（Claude Code v2.1.220 parity；⚠ 上游把子 Agent 嵌套深度默认从 5 降为 **1**，需要多层派生时用 `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 调回）+ macOS 自动更新修复 + 新会话不再继承 exclude 过滤器。
+> Baseline as of 2026-08-07: local main merged up to upstream **v0.11.4** (2026-08-06) — 0 behind, 150 custom ahead. Merge commit `ca614481`, checkpoint 分支 `backup/main-pre-v0.11.4` @ 717af162。小版本、**与定制零文件交集**（历次最干净的一次，仅 `bun.lock` 冲突）：**Claude Opus 4.6 回归模型选择器**（被强制迁到 4.8 的连接自动补回 4.6，一次性；默认仍是 4.8，手动删掉后不再回来）+ 修复 **Explore 模式被拦截工具后闷声结束**（v0.11.3 SDK 升级带进来的回归，agent 现在能看到拦截原因并改提方案）。
+>
+> **⚠️ 无 SDK 变化 ≠ 不用重建子进程**：本次 `config/models.ts` + `models-pi.ts` 变了（模型目录），`pi-agent-server` 自带目录副本——重建前 bundle 里 `opus-4-6` 命中 35 处、重建后 39 处，确属过期。**判据应是"模型目录/Pi SDK 是否变化"，而不是"Agent SDK 版本号是否变化"**。测试基线不变：ui 340 全绿；electron/src 929 pass / 8 fail（browser-pane-manager）；shared 2177 pass / 13 fail（i18n 排序 ×7 + channel routing ×2 + ClaudeEventAdapter ×3，均上游既有）。
+>
+> 前一基线 (2026-08-04): local main merged up to upstream **v0.11.3** (2026-08-03) — 0 behind, 148 custom ahead. Merge commit `664071d1`, checkpoint 分支 `backup/main-pre-v0.11.3` @ 5360cd3b。**⭐ 两个修复直接命中我们的日常**：输入框不再强制首字母大写（此前破坏拼音/CJK 输入法连续输入）、含空格路径（`%20`）的本地文件链接恢复可用。另有 `archive_session` 会话工具（Agent 可归档他人会话，不能归档自己/跑动中的）+ **Agent SDK 0.3.197→0.3.220**（Claude Code v2.1.220 parity；⚠ 上游把子 Agent 嵌套深度默认从 5 降为 **1**，需要多层派生时用 `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 调回）+ macOS 自动更新修复 + 新会话不再继承 exclude 过滤器。
 >
 > **合并要点**：10 文件与定制交集，但**只有 `bun.lock` 真冲突**（`--theirs` + `bun install`）。值得记的一笔：上游 #944 修 `%20` 路径引入了 `decodeFilePath`（无 `%` 零开销、非法编码回退原串），与我们 2026-06 的定制功能等价但更严谨——**已删掉我们那段自行 `decodeURIComponent` 的分支，收敛到上游实现**。这是"定制被上游追平后主动退场"的第一例，以后合并遇到同类情况照此处理。**SDK 升级 → 必须 `server:build:subprocess`**（已验证子进程 bundle 含 archive_session、SDK 0.3.220）。合并后测试：ui 340 全绿；electron/src 929 pass / 8 fail（仍为 browser-pane-manager 上游既有）。
 >
