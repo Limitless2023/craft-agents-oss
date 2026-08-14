@@ -1150,6 +1150,11 @@ function managedToSession(m: ManagedSession, overrides?: Partial<Session>): Sess
     isProcessing: m.isProcessing,
     sessionFolderPath: getSessionStoragePath(m.workspace.rootPath, m.id),
     supportsBranching: resolveSupportsBranching(m),
+    // SDK 会话标识：渲染层据此定位 SDK 自己写的 transcript
+    // （~/.claude/projects/<slug>/<sdkSessionId>.jsonl），用于「轨迹视图」。
+    // 只读元信息，不参与任何写路径。
+    sdkSessionId: m.sdkSessionId,
+    sdkCwd: m.sdkCwd,
     ...overrides,
   } as Session
 }

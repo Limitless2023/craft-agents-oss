@@ -401,6 +401,8 @@ export interface ElectronAPI {
   openUrl(url: string): Promise<void>
   openFile(path: string): Promise<void>
   showInFolder(path: string): Promise<void>
+  /** 用户主目录（轨迹视图据此展开 sdkCwd 的 `~`）。 */
+  homeDir(): Promise<string>
 
   // Menu event listeners
   onMenuNewChat(callback: () => void): () => void

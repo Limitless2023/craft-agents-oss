@@ -119,6 +119,8 @@ export const CHANNEL_MAP = {
   openUrl: invoke(RPC_CHANNELS.shell.OPEN_URL),
   openFile: invoke(RPC_CHANNELS.shell.OPEN_FILE),
   showInFolder: invoke(RPC_CHANNELS.shell.SHOW_IN_FOLDER),
+  // 轨迹视图用：把 sdkCwd 里的 `~` 展开成绝对路径以定位 SDK transcript
+  homeDir: invoke(RPC_CHANNELS.system.HOME_DIR),
 
   // Menu event listeners
   onMenuNewChat: listener(RPC_CHANNELS.menu.NEW_CHAT),

@@ -72,6 +72,9 @@ export interface Session {
   enabledSourceSlugs?: string[]
   workingDirectory?: string
   sessionFolderPath?: string
+  /** SDK 侧会话 id + 工作目录——渲染层据此定位 SDK transcript（轨迹视图只读用）。 */
+  sdkSessionId?: string
+  sdkCwd?: string
   sharedUrl?: string
   sharedId?: string
   model?: string
