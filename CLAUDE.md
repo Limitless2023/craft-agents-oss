@@ -286,6 +286,45 @@ Preview 面板不再是 `.md` 专属：**代码/文本/JSON 文件点开后默�
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 
+### Trajectory View — 模型实际收到了什么（读 SDK transcript）
+
+聊天页标题栏右侧 Route 图标（分享按钮左边，与「编辑任务」同一动作区；仅会话已关联 SDK 记录时出现，窄面板下隐藏）→ 全屏只读视图：**上下文构成条**（注入 / 你的输入 / 推理 / 回复 / 工具 各占多少）+ **注入块排行**（哪个自动注入的块最占地方）+ 可展开的逐条明细（按类筛选）。灵感来自 DeepSeek Harness 的 Trajectory view。
+
+**核心判断：不重复记录，只做读取与归因。** craft 的 `session.jsonl` 是"对话当前样子"的快照（每轮全量重写、只有 9 种消息角色），**注入块 / 系统提示 / 压缩细节 / 原始 SDK 事件一律不落盘**；而 **Claude SDK 自己在 `~/.claude/projects/<slug>/<sdkSessionId>.jsonl` 写了一份高保真轨迹**——注入块逐块可见、`compactMetadata` 完整（preTokens/postTokens/cumulativeDroppedTokens）、工具原始出入参俱全。既然数据已在盘上，就没有理由再建一套记录管线。
+
+**两个实测得出的关键细节**：
+1. **slug 规则是"斜杠**和**点号都替换为连字符"**——`/Users/x/.craft-agent/…` → `-Users-x--craft-agent-…`（点号产生双连字符）。只替换斜杠会找不到文件。
+2. **注入块按内容特征识别而非位置**（`<session_state>` / `<sources>` / `<workspace_capabilities>` / `<working_directory>` / `**USER'S DATE AND TIME`），注入顺序会随版本变。
+
+**诚实的盲区**：Claude 基座系统提示词与工具定义由 SDK 的 `preset:'claude_code'` 持有，本仓库无论如何读不到——UI 里明确标注，不假装完整。
+
+**样本量级**（真实会话验证）：57 条目 / 16191 字符中，**注入占 37%、用户输入仅占 0.6%**——这正是此前完全不可见的部分。
+
+#### DeepSeek Harness 式界面（2026-08-13 二期）
+
+界面按 DeepSeek Harness 的轨迹视图重做：**顶部三泳道时间轴（Input / Model / Tools）+ 中间密集事件流 + 右栏详情/构成 + 底部统计条**。
+
+- **时间轴**：段宽即耗时，三种轴口径切换——`时长`（按真实时间，看耗时花在哪）/ `回合`（每轮等宽，看轮内结构）/ `步骤`（每步等宽，看序列）。一种口径不够是因为一次 40 秒的模型生成会把毫秒级工具挤成一根线，而等宽又看不出谁慢。段与列表行**共用 `entryIndex` 作选中键**，点哪边都选中同一条。**在泳道上拖拽即框选一段时间**（读数条显示时长+条数，✕ 或点空白清除），下方列表窗外条目淡出并自动滚到窗内第一条——看到一段很慢，直接框出来看那几十秒在干嘛。交互由单独一层顶层捕获（段 `pointer-events-none`，命中靠自身几何判定），点选与框选归同一所有者，无 z-index 之争；位移超 4px 才算拖。**双指捏合/滚轮以光标为定点缩放**（最高 500×，双指横扫平移，一键复原），百轮会话不再挤成一片——视口在轴空间（投影后的 [0,1]）上做，三种口径完全同构；段的最小宽度必须加在**屏幕空间**，加在轴空间会随缩放放大到撑满轨道。
+- **事件流**：一条目一行，左槽角色标签（SYSTEM/USER/CONTEXT/THINKING/ASSISTANT/TOOL）。工具行把调用与结果压成 `名字 {入参} → 结果`；**已配对的结果不单独成行**。
+- **右栏**：未选中时是「上下文构成」（构成条 + 筛选 chip + 注入块排行 + **工具耗时排行** + 盲区声明；前者回答"上下文被谁吃了"，后者回答"时间被谁吃了"，工具排行按框选窗口收窄并标注"本段"），选中后变条目详情（概览/入参/结果/原始/计时四五个页签，按类型动态给）。**左缘可拖宽**（双击复位，宽度持久化）——33K 字符的系统提示词挤在 360px 里没法读。宽度由 `TrajectorySidePanel` 统一持有（两个视图共用槽位，各持一份切换会跳）；拖拽期间直接改 DOM 不过 React（否则每像素重渲染上千行列表），容器宽度进 state 不在渲染时读 ref（首帧 ref 为 null 会把 clamp 永久掐死在最小值）。
+- **底部统计**：`N 轮·N 步 | 模型 37.5s · 工具 9.2s (12) | 缓存命中 87% | 输入 231K · 输出 4.3K`。
+
+**第二档（系统提示词）**：SDK transcript 唯一缺的就是系统提示词——那段由 craft 在建请求时拼装，只有它自己知道。`packages/shared/src/sessions/system-prompt-record.ts` 在 `claude-agent.ts` 的 SDK options 构造点补写 sidecar `<会话>/meta/system-prompt.jsonl`：**内容寻址、变了才追加**（稳定不变的提示词一个会话只写一次），进程内缓存指纹 + 重启后比对盘上末行，写失败一律静默（旁路数据绝不能拖垮真实对话）。渲染层 `mergeTrajectory` 把它**置顶**（不按时间插：它是会话级常量，从第一个 token 起就在起作用，只是我们直到某轮才抄下来；按记录时刻插会埋进对话中间且被无时间戳条目拽偏——初版的真 bug），同理不上时间轴泳道。剩余盲区收窄为「Claude Code 基座预设与工具定义」。
+
+**五个实测踩坑（都有测试守护）**：
+1. slug 规则是斜杠**和**点号都替换为连字符，只替换斜杠找不到文件；
+2. 工具结果也是 `user` 角色，回合分组必须排除它，否则每个工具结果都算一次新提问；
+3. 同一 `requestId` 的每个块都带一份**完全相同**的 usage，逐块累加会把 token 放大到块数倍；
+4. **只调工具不说话的请求也必须挂 usage**——这是最常见的形态，漏了会让整步 token 凭空消失（测试逮到的真 bug）；
+5. 模型段起点要回溯到上一个事件结束，只从首个块时间戳算会让等待时间消失。也因此 UI 明写"时长来自会话时间戳"，含排队与网络往返、非服务端计时。
+
+刻意**不用 `PreviewOverlay`**：它把 children 塞进带渐隐遮罩的文档滚动容器，与"顶栏固定 + 双栏各自滚 + 底部固定"的应用式布局冲突，故自持 portal + 复用 `FullscreenOverlayBaseHeader`。列表未虚拟滚动，超 3000 行截尾并在顶部明示（统计与时间轴仍吃全量）。
+
+**New files:** `lib/trajectory-core.ts`(+test，25 用例)、`components/trajectory/{TrajectoryOverlay,TrajectoryLanes,TrajectoryList,TrajectoryDetail,TrajectoryComposition}.tsx` + `kind-meta.ts` + `CLAUDE.md`(L2)、`packages/shared/src/sessions/system-prompt-record.ts`
+**Modified files:** `SessionManager.ts` + `protocol/dto.ts`（会话 DTO 补 `sdkSessionId`/`sdkCwd`）、`shared/agent/claude-agent.ts`（options 构造点记录系统提示词）、`transport/channel-map.ts` + `shared/types.ts`（暴露已有的 `system:homeDir`）、`pages/ChatPage.tsx`（头部按钮 + 挂载）、7× i18n（51 键）。读文件复用 `file:read`，**零新 IPC 通道**。
+
+**Patching:** ⚠ 非 renderer-only（SessionManager + claude-agent 进 main.cjs，preload 也变）→ `build:renderer` + `build:main` + `build:preload` + `bash patch-app.sh`。`claude-agent.ts` 不进 subprocess bundle（那是 Pi 路径），无需 `server:build:subprocess`。
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

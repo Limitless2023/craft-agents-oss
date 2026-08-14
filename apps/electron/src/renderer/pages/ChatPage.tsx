@@ -8,7 +8,7 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { AlertCircle, Globe, Copy, RefreshCw, Link2Off, Info, Pencil } from 'lucide-react'
+import { AlertCircle, Globe, Copy, RefreshCw, Link2Off, Info, Pencil, Route } from 'lucide-react'
 import { ChatDisplay, type ChatDisplayHandle } from '@/components/app-shell/ChatDisplay'
 import { PanelHeader } from '@/components/app-shell/PanelHeader'
 import { SessionMenu } from '@/components/app-shell/SessionMenu'
@@ -30,6 +30,7 @@ import { kanbanEditorTargetAtom } from '@/atoms/kanban'
 import { sidebarDocsAtomFamily, openSidebarDocTab } from '@/atoms/sidebar-docs'
 import { useNavigation } from '@/contexts/NavigationContext'
 import { buildSessionMarkdown, sessionExportFileName } from '@/lib/session-markdown'
+import { TrajectoryOverlay } from '@/components/trajectory/TrajectoryOverlay'
 import { getSessionTitle } from '@/utils/session'
 // Model resolution: connection.defaultModel (no hardcoded defaults)
 import { resolveEffectiveConnectionSlug, isSessionConnectionUnavailable } from '@config/llm-connections'
@@ -190,6 +191,7 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
 
   // Track window focus state for marking session as read when app regains focus
   const [isWindowFocused, setIsWindowFocused] = React.useState(true)
+  const [trajectoryOpen, setTrajectoryOpen] = React.useState(false)
   React.useEffect(() => {
     window.electronAPI.getWindowFocusState().then(setIsWindowFocused)
     const cleanup = window.electronAPI.onWindowFocusChange(setIsWindowFocused)
@@ -667,10 +669,24 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
     )
   }, [isTaskOrchestrator, handleEditTask, t])
 
+  // 轨迹按钮与分享同族——都是"把这个会话当成一件东西来看"，故并排放在动作区。
+  // 仅在会话已关联 SDK 记录时出现（没记录点了也是空的）；窄面板下让位给信息按钮。
+  const trajectoryButton = React.useMemo(() => {
+    if (isCompactMode || !session?.sdkSessionId) return undefined
+    return (
+      <PanelHeaderCenterButton
+        icon={<Route className="h-4 w-4" />}
+        tooltip={t('sessionMenu.viewTrajectory')}
+        onClick={() => setTrajectoryOpen(true)}
+      />
+    )
+  }, [isCompactMode, session?.sdkSessionId, t])
+
   const primaryHeaderAction = isCompactMode ? compactInfoButton : shareButton
-  const headerActions = editTaskButton ? (
+  const headerActions = editTaskButton || trajectoryButton ? (
     <div className="flex items-center gap-1.5">
       {editTaskButton}
+      {trajectoryButton}
       {primaryHeaderAction}
     </div>
   ) : primaryHeaderAction
@@ -906,6 +922,17 @@ const ChatPage = React.memo(function ChatPage({ sessionId }: ChatPageProps) {
         onSubmit={handleRenameSubmit}
         placeholder={t('chat.enterSessionName')}
       />
+      {/* 轨迹视图：只读展示模型实际收到的上下文（数据源是 SDK 自己的 transcript） */}
+      {trajectoryOpen && (
+        <TrajectoryOverlay
+          isOpen
+          onClose={() => setTrajectoryOpen(false)}
+          sessionTitle={displayTitle}
+          sdkSessionId={session?.sdkSessionId}
+          sdkCwd={session?.sdkCwd}
+          sessionFolderPath={session?.sessionFolderPath}
+        />
+      )}
     </>
   )
 })
