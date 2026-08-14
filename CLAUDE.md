@@ -323,6 +323,8 @@ Preview 面板不再是 `.md` 专属：**代码/文本/JSON 文件点开后默�
 **New files:** `lib/trajectory-core.ts`(+test，25 用例)、`components/trajectory/{TrajectoryOverlay,TrajectoryLanes,TrajectoryList,TrajectoryDetail,TrajectoryComposition}.tsx` + `kind-meta.ts` + `CLAUDE.md`(L2)、`packages/shared/src/sessions/system-prompt-record.ts`
 **Modified files:** `SessionManager.ts` + `protocol/dto.ts`（会话 DTO 补 `sdkSessionId`/`sdkCwd`）、`shared/agent/claude-agent.ts`（options 构造点记录系统提示词）、`transport/channel-map.ts` + `shared/types.ts`（暴露已有的 `system:homeDir`）、`pages/ChatPage.tsx`（头部按钮 + 挂载）、7× i18n（51 键）。读文件复用 `file:read`，**零新 IPC 通道**。
 
+**入口时有时无的根因（2026-08-14 修复）**：`sdkSessionId` 是**首轮跑完才由 SDK 回传**的，`onSdkSessionIdUpdate` 只写内存与磁盘、**不推事件**；而渲染层那份会话 DTO 是加载时构造的，之后再没刷新过。于是新会话跑完第一轮，盘上有了、界面上那份仍是 `undefined` → 依赖它的 UI 时有时无，要重启 app 才对。修法是走**现成通道**：`handleSessionMetadataChanged` 本就是无脑展开合并（`{...session, ...changes}`），只有 dto.ts 的 `Partial<Pick<...>>` 在收窄类型——把 `sdkSessionId`/`sdkCwd` 加进那个联合，然后在 id 落定与两处清空（resume recovery / branch fork invalidated）时各推一次。清空也必须推，否则界面会留一个指向已失效 transcript 的入口。**教训：凡是"运行中才产生"的会话字段，写盘之外必须显式推给渲染层——DTO 只在加载时构造一次。**
+
 **Patching:** ⚠ 非 renderer-only（SessionManager + claude-agent 进 main.cjs，preload 也变）→ `build:renderer` + `build:main` + `build:preload` + `bash patch-app.sh`。`claude-agent.ts` 不进 subprocess bundle（那是 Pi 路径），无需 `server:build:subprocess`。
 
 ## Patching the Official App

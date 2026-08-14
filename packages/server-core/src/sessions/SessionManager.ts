@@ -3464,6 +3464,13 @@ export class SessionManager implements ISessionManager {
         }
         this.persistSession(managed)
         sessionPersistenceQueue.flush(managed.id)
+        // 推给渲染层：这个 id 是首轮跑完才拿到的，而渲染层那份 DTO 是加载时构造的，
+        // 不推就要等到下次重启才刷新——依赖它的 UI（轨迹入口）会时有时无。
+        this.sendEvent({
+          type: 'session_metadata_changed',
+          sessionId: managed.id,
+          changes: { sdkSessionId, sdkCwd: managed.sdkCwd },
+        }, managed.workspace.id)
       }
 
       const onSdkSessionIdCleared = () => {
@@ -3471,6 +3478,12 @@ export class SessionManager implements ISessionManager {
         sessionLog.info(`SDK session ID cleared for ${managed.id} (resume recovery)`)
         this.persistSession(managed)
         sessionPersistenceQueue.flush(managed.id)
+        // 同样要推：否则界面上会留一个指向已失效 transcript 的入口
+        this.sendEvent({
+          type: 'session_metadata_changed',
+          sessionId: managed.id,
+          changes: { sdkSessionId: undefined },
+        }, managed.workspace.id)
       }
 
       const onBranchForkInvalidated = () => {
@@ -3481,6 +3494,11 @@ export class SessionManager implements ISessionManager {
         sessionLog.info(`Branch fork invalidated for ${managed.id}: cleared all fork metadata`)
         this.persistSession(managed)
         sessionPersistenceQueue.flush(managed.id)
+        this.sendEvent({
+          type: 'session_metadata_changed',
+          sessionId: managed.id,
+          changes: { sdkSessionId: undefined },
+        }, managed.workspace.id)
       }
 
       const getRecoveryMessages = () => {
