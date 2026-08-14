@@ -1089,6 +1089,31 @@ html.dark[data-scenic] .fullscreen-overlay-background {
 }
 
 /* =============================================================================
+   ATTENTION BREATHE
+
+   "需要你动手"的状态（待批权限 / 待批计划）用它。存在的理由是**余光**：
+   静止的小图标要"识别"（得看过去、认出形状），运动才能被"感知"（不看也注意到）。
+   刻意用纯 CSS 而非 JS 动画——侧边栏可能同时有几十个会话项，每项一个 JS 循环
+   会拖垮列表；这也与既有 Spinner 的"pure CSS, no JS state"一致。
+   幅度刻意克制（缩放 6%、透明度 25%）：这是提示不是警报。
+============================================================================= */
+
+.animate-attention {
+  animation: attention-breathe 2s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes attention-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(1.06); }
+}
+
+/* 系统开启"减少动效"时只留静态图标——动效是增强，不是信息本身 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-attention { animation: none; }
+}
+
+/* =============================================================================
    SHAKE ANIMATION
 
    Horizontal shake for invalid actions (e.g., trying to disable last mode).

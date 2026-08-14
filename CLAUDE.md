@@ -327,6 +327,22 @@ Preview 面板不再是 `.md` 专属：**代码/文本/JSON 文件点开后默�
 
 **Patching:** ⚠ 非 renderer-only（SessionManager + claude-agent 进 main.cjs，preload 也变）→ `build:renderer` + `build:main` + `build:preload` + `bash patch-app.sh`。`claude-agent.ts` 不进 subprocess bundle（那是 Pi 路径），无需 `server:build:subprocess`。
 
+### Needs-You Attention Signal — 待你处理的会话，余光可感知
+
+「需要你动手」的状态（待批权限 / 待批计划）从**静态小图标**升级为**会呼吸的图标 + 常驻聚合徽标**。灵感来自 Grok Bot 那个[代码写成的形变图标](https://benji.org/morphing-icons-with-claude)，但**没有照抄形变**——调研后发现真正可迁移的不是动画本身，而是"运动携带信息"这一点。
+
+**调研纠偏（值得记）**：最初的判断是"侧边栏分不出'在等你'和'在跑'"，**读代码后证伪**——`SessionItem` 早就有四个指示器（Spinner / 未读圆点 / 绿色计划闪电 / 琥珀盾牌 `hasPendingPrompt`）。真正的缺口是另外两条：
+1. 那些图标**不会动**——静止图标要"识别"（看过去、认出形状），运动才能被"感知"（不看也注意到）；
+2. **出了会话列表就完全看不见**——权限请求只在该会话聊天页里呈现（`usePendingPermission`），你在看板/收藏页/别的会话时，`pendingPermissions` 没有任何聚合出口。
+
+**关键设计：聚合徽标只数活的权限请求**，刻意不含"计划待批"（`lastMessageRole === 'plan'`）。后者是持久化状态，几天前废弃的会话会让徽标永远非零——**一个长期不归零的提示比没有提示更糟，它训练你忽略它**。逐会话的图标两种都给（就在眼前，不会误导），只有聚合数字要求这份严格。
+
+其余取舍：动效用**纯 CSS**（侧边栏可能同时几十项，每项一个 JS 循环会拖垮列表；与既有 `Spinner` 的 "pure CSS, no JS state" 一致），幅度克制（缩放 6%、透明度 25%——这是提示不是警报），并在 `prefers-reduced-motion` 下完全关闭（动效是增强，不是信息本身）。`LinkItem.attention` 与既有 `label` 的关键差别是**常驻可见**：`label`（会话总数）悬停才显形，而唯一需要你动手的信号藏在悬停后面等于没有。
+
+**Modified files:** `renderer/index.css`（`animate-attention` + reduced-motion）、`app-shell/SessionItem.tsx`（两个 actionable 图标加动效）、`app-shell/LeftSidebar.tsx`（`LinkItem.attention` 常驻徽标）、`app-shell/AppShell.tsx`（`attentionCount` + 挂到 nav:allSessions）。
+
+**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.

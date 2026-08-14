@@ -1594,6 +1594,7 @@ function AppShellContent({
     return (pendingPermissions.get(sessionId)?.length ?? 0) > 0
   }, [pendingPermissions])
 
+
   // Workspace-level unread indicators (needed for workspace selectors across all workspaces)
   const [workspaceUnreadMap, setWorkspaceUnreadMap] = useState<Record<string, boolean>>({})
 
@@ -1623,6 +1624,19 @@ function AppShellContent({
       !s.hidden && (s.workspaceId === activeWorkspaceId || (remoteWorkspaceId && s.workspaceId === remoteWorkspaceId))
     )
   }, [sessionMetaMap, activeWorkspaceId, remoteWorkspaceId])
+
+  /**
+   * 待你处理的会话数，挂在「全部会话」上常驻显示。
+   *
+   * **只数活的权限请求**，刻意不把"计划待批"（lastMessageRole === 'plan'）算进来：
+   * 那是持久化状态，几天前废弃的会话会让徽标永远非零，一个长期不归零的提示
+   * 比没有提示更糟——它训练你忽略它。权限请求是运行时状态，处理完自然消失。
+   * 逐会话的图标两种都给（就在眼前，不会误导），只有聚合数字要求这份严格。
+   */
+  const attentionCount = React.useMemo(
+    () => workspaceSessionMetas.filter(m => (pendingPermissions.get(m.id)?.length ?? 0) > 0).length,
+    [workspaceSessionMetas, pendingPermissions],
+  )
 
   // Active sessions exclude archived - use this for all counts and filters except archived view
   const activeSessionMetas = useMemo(() => {
@@ -2688,6 +2702,7 @@ function AppShellContent({
                       id: "nav:allSessions",
                       title: t("sidebar.allSessions"),
                       label: String(workspaceSessionMetas.length),
+                      attention: attentionCount,
                       icon: Inbox,
                       variant: sessionFilter?.kind === 'allSessions' ? "default" : "ghost",
                       onClick: handleAllSessionsClick,

@@ -61,7 +61,12 @@ export interface SortableConfig {
 export interface LinkItem {
   id: string            // Unique ID for navigation (e.g., 'nav:allSessions')
   title: string
-  label?: string        // Optional badge (e.g., count)
+  label?: string        // Optional badge (e.g., count) —— 悬停才显形，用于非紧要的计数
+  /**
+   * 待你处理的会话数。与 label 的关键差别是**常驻可见**：它是唯一需要你动手的信号，
+   * 藏在悬停后面等于没有。0 或 undefined 时整个徽标不渲染。
+   */
+  attention?: number
   icon: LucideIcon | React.ReactNode  // LucideIcon or custom React element
   iconColor?: string    // Optional color class for the icon
   /** Whether the icon responds to color (uses currentColor). Default true for Lucide icons. */
@@ -538,9 +543,22 @@ const SidebarButton = React.forwardRef<HTMLButtonElement, SidebarButtonProps & R
             {link.afterTitle}
           </span>
         )}
+        {/* Attention Badge: 待处理会话数。常驻可见 + 呼吸动效——出了会话列表，
+            这是唯一能告诉你"有东西在等你"的地方。 */}
+        {!!link.attention && link.attention > 0 && (
+          <span
+            className={cn(
+              link.afterTitle ? 'ml-0' : 'ml-auto',
+              'animate-attention inline-flex items-center gap-1 text-[11px] tabular-nums text-info',
+            )}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-info" />
+            {link.attention}
+          </span>
+        )}
         {/* Label Badge: Shows count or status on the right, revealed on section hover */}
         {link.label && (
-          <span data-touch-reveal="true" className={cn(link.afterTitle ? 'ml-0' : 'ml-auto', 'text-xs text-foreground/30 opacity-0 group-hover/section:opacity-100 group-data-[state=open]:opacity-100 group-data-[edit-active=true]:opacity-100 transition-opacity')}>
+          <span data-touch-reveal="true" className={cn(link.afterTitle || link.attention ? 'ml-0 pl-1.5' : 'ml-auto', 'text-xs text-foreground/30 opacity-0 group-hover/section:opacity-100 group-data-[state=open]:opacity-100 group-data-[edit-active=true]:opacity-100 transition-opacity')}>
             {link.label}
           </span>
         )}
