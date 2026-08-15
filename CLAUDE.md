@@ -343,6 +343,22 @@ Preview 面板不再是 `.md` 专属：**代码/文本/JSON 文件点开后默�
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 
+## Git Remotes — 上游只读，备份可写
+
+这个仓库有两个远端，职责不对称，**别把它们搞混**：
+
+| 远端 | 指向 | 用途 |
+|---|---|---|
+| `origin` | `lukilabs/craft-agents-oss` | **官方上游，只读** —— 拉更新用 |
+| `myfork` | `Limitless2023/craft-agents-oss` | **你的备份，可写** —— `main` 跟踪它 |
+
+注意 `origin` 是上游而不是你自己的 fork（GitHub 惯例正好相反），这是个真实的坑：`main` 原本跟踪 `origin/main`，一个裸 `git push` 会试图把 150+ 个定制提交推进官方仓库。已做两道防护：
+
+1. `git branch -u myfork/main main` —— 默认推拉都走你的备份，`git status` 也以备份为参照
+2. `git remote set-url --push origin DISABLED_upstream_is_read_only` —— 对上游的推送被立刻拦下（fetch 不受影响，上面那套升级命令照常可用）
+
+日常：`git push` 备份自己的工作。升级：照旧 `git pull origin main`（显式写 origin，语义没变）。
+
 ## Patching the Official App
 
 We replace **JS bundles + main.cjs + preload** and optionally patch `Info.plist` for file associations. Modifying `Info.plist` requires ad-hoc re-signing.
