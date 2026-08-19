@@ -372,6 +372,12 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-08-19: local main merged up to upstream **v0.12.0** (2026-08-18) — 0 behind, 158 custom ahead. Merge commit `568e38b8`, checkpoint 分支 `backup/main-pre-v0.12.0` @ 75a0e84d。**这版基本是一次搬家而非功能版本**：域名迁到 `thecraftagents.com`（应用/下载/自动更新源/分享链接/文档全部换址），文档站从内置 Mintlify 改为纯静态站。唯一实质变化对我们有利——**agent 不再挂载内置 `craft-agents-docs` MCP 服务器**（改为引用公开文档站），每个会话少一条常驻后台连接，`<sources>` 注入块也随之变短。
+>
+> **合并干净度**：上游真实改动 57 文件 / +621 −322，与定制交集 6 个（`ChatPage.tsx` 只改 2 行文档 URL、`SessionManager.ts` 与 `claude-agent.ts` 都只删 `craft-agents-docs` 相关块，均离定制区很远），**仅 `bun.lock` 真冲突**（`--theirs` + `bun install`）。**模型目录与 Agent/Pi SDK 版本均未变 → 无需 `server:build:subprocess`**（判据见 v0.11.4 那条）。测试基线原样复现：electron/src 972 pass / 8 fail（browser-pane-manager）；ui 340 全绿；shared 2177 pass / 13 fail；server-core 220 全绿。
+>
+> ⚠️ 副作用：内置文档源被移除（`builtin-sources.ts` −77 行、`session-mcp-server/index.ts` −84 行），**若某些会话手动启用过 `craft` 数据源，合并后会消失**，其他源不受影响。
+>
 > Baseline as of 2026-08-07: local main merged up to upstream **v0.11.4** (2026-08-06) — 0 behind, 150 custom ahead. Merge commit `ca614481`, checkpoint 分支 `backup/main-pre-v0.11.4` @ 717af162。小版本、**与定制零文件交集**（历次最干净的一次，仅 `bun.lock` 冲突）：**Claude Opus 4.6 回归模型选择器**（被强制迁到 4.8 的连接自动补回 4.6，一次性；默认仍是 4.8，手动删掉后不再回来）+ 修复 **Explore 模式被拦截工具后闷声结束**（v0.11.3 SDK 升级带进来的回归，agent 现在能看到拦截原因并改提方案）。
 >
 > **⚠️ 无 SDK 变化 ≠ 不用重建子进程**：本次 `config/models.ts` + `models-pi.ts` 变了（模型目录），`pi-agent-server` 自带目录副本——重建前 bundle 里 `opus-4-6` 命中 35 处、重建后 39 处，确属过期。**判据应是"模型目录/Pi SDK 是否变化"，而不是"Agent SDK 版本号是否变化"**。测试基线不变：ui 340 全绿；electron/src 929 pass / 8 fail（browser-pane-manager）；shared 2177 pass / 13 fail（i18n 排序 ×7 + channel routing ×2 + ClaudeEventAdapter ×3，均上游既有）。
