@@ -81,6 +81,30 @@ for SERVER in pi-agent-server session-mcp-server bridge-mcp-server; do
   fi
 done
 
+# ===========================================================================
+# Step 4.7: Sync bundled resources (docs / release-notes / permissions / themes)
+# ---------------------------------------------------------------------------
+# 权威资源树是 dist/resources —— getBundledAssetsDir() 解析 <assetsRoot>/resources/<sub>，
+# 打包后 assetsRoot 即 app/dist。此前脚本只同步 app/resources 下的子进程包，从没碰
+# 过这棵树，于是它一直冻结在**首次安装官方版那天**的状态（本机是 2026-03-31）。
+# 后果不只是"发版说明显示旧版本"：app 启动时会把 dist/resources/docs 拷进
+# ~/.craft-agent/docs，而系统提示词又指示 agent 去读那些文档——等于让 agent 长期
+# 读着几个月前的说明书，还缺新增文档（如 markdown-preview.md）。
+# 排除三个 server 目录：它们的权威副本由 Step 4.6 从 packages/*/dist 单独同步，
+# 这里若一并覆盖会把刚建好的 bundle 换成 build:copy 拷来的旧文件。
+# 需要 `bun run --filter '@craft-agent/electron' build:copy` 先刷新 $BUILD/resources。
+# ===========================================================================
+if [ -d "$BUILD/resources" ]; then
+  echo "Syncing bundled resources (docs, release-notes, permissions, themes)..."
+  rsync -a --delete \
+    --exclude 'pi-agent-server/' --exclude 'session-mcp-server/' --exclude 'bridge-mcp-server/' \
+    "$BUILD/resources/" "$APP_DIST/resources/"
+  echo "  release-notes: up to $(ls "$APP_DIST/resources/release-notes" | grep -v next | sort -V | tail -1)"
+  echo "  docs: $(ls "$APP_DIST/resources/docs" | wc -l | tr -d ' ') files"
+else
+  echo "Bundled resources: skipped (run 'bun run --filter @craft-agent/electron build:copy')"
+fi
+
 echo "Setting app version to $APP_VERSION..."
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST" 2>/dev/null \
   || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $APP_VERSION" "$PLIST"

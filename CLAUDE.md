@@ -419,6 +419,7 @@ bun run --filter '@craft-agent/electron' build:renderer
 bun run --filter '@craft-agent/electron' build:main
 bun run --filter '@craft-agent/electron' build:preload
 bun run --filter '@craft-agent/electron' build:preload-toolbar
+bun run --filter '@craft-agent/electron' build:copy   # 刷新 dist/resources（docs/发版说明/权限/主题）
 
 # 2b. If the Pi SDK was upgraded (new models in the catalog), REBUILD the
 #     subprocess bundle too — main.cjs and pi-agent-server carry separate SDK
@@ -438,10 +439,12 @@ bash patch-app.sh
 3. Copies `index.html` directly from build output (avoids fragile hash detection)
 4. Syncs `@anthropic-ai/claude-agent-sdk` + native binary package
 5. **Syncs subprocess server bundles** (`pi-agent-server`, `session-mcp-server`, `bridge-mcp-server`) from `packages/<server>/dist/index.js` → `resources/<server>/index.js`
+6. **Syncs bundled resources** (`docs`, `release-notes`, `permissions`, `themes`, `tool-icons`) from `apps/electron/dist/resources/` → 装机版 `dist/resources/`，排除三个 server 目录（它们由上一步单独同步，一并覆盖会把刚建好的 bundle 换成 `build:copy` 拷来的旧文件）
 6. Adds `.md` file association to `Info.plist` (with UTI declarations)
 7. Re-signs the app (ad-hoc) and re-registers with Launch Services
 
 ### Important notes:
+- **⚠️ 装机版有两棵资源树，权威的是 `dist/resources`**（2026-08-19 修复）：`getBundledAssetsDir()` 解析 `<assetsRoot>/resources/<sub>`，打包后 assetsRoot = `app/dist`；而 `patch-app.sh` 早期只同步 `app/resources` 下的子进程包，从没碰过前者，于是它一直**冻结在首次安装官方版那天**（本机 2026-03-31，故发版说明面板一直显示 v0.8.1）。后果不止于显示：app 启动时把 `dist/resources/docs` 拷进 `~/.craft-agent/docs/`，而系统提示词又指示 agent 去读那些文档——等于让 agent 长期读几个月前的说明书，且缺新增文档（`markdown-preview.md` 从未落地过）。Step 4.7 已修，**但它依赖 `build:copy`**：升级时漏跑这步，同步的就是上一次 build 的旧资源。另注意 app 的文档同步只覆盖不删除，上游删掉的文档会在用户目录留存（本次手工清掉了早已更名为 automations 的 `hooks.md`）。
 - **Re-signing is needed** when `Info.plist` is modified (file association step) — the script handles this automatically
 - **No separate app** — we patch the official app in-place; reinstalling official version restores original
 - Building a standalone "Craft L Agents" app fails on macOS 26 due to strict code signing enforcement on ad-hoc signed Electron apps
