@@ -372,6 +372,12 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-08-27: local main merged up to upstream **v0.12.1** (2026-08-26) — 0 behind, 161 custom ahead. Merge commit `17442b42`, checkpoint 分支 `backup/main-pre-v0.12.1` @ 0da51247。内容集中在 **Pi 后端**：新增 **Moonshot AI / Kimi K3**（1M 上下文、常开推理、图片输入；K2.6 作快速摘要模型）+ **Pi SDK 0.80.6→0.81.1**（刷新全部 Pi 系模型目录）+ 修 ChatGPT 网页搜索钉死退役模型 id、自定义 OpenAI 兼容端点误收 `store` 参数、WhatsApp LID 迁移账号身份识别。走 Claude 后端的话日常无感。
+>
+> **合并**：上游 53 文件 / +1855 −241，与定制交集 3 个（`apps/electron/package.json`、`AiSettingsPage.tsx`、`bun.lock`），**仅 `bun.lock` 真冲突**。⚠️ **模型目录（`config/models-pi.ts`）+ Pi SDK 双双变化 → 必须 `server:build:subprocess`**，判据见 v0.11.4 那条。**jiti 坑如期复现**：0.81.1 仍精确依赖嵌套 jiti，首次构建报 `Could not resolve "jiti/static"`，`bun install --force` 补齐后即通过（重建后子进程 bundle 里 kimi 命中 92 处）。测试基线：electron/src 972 pass / 8 fail（browser-pane-manager）；ui 340 全绿；shared **2201** pass / 13 fail（通过数 +24 为上游新增 Kimi 用例）；server-core 220 全绿。
+>
+> 记一条无需惊慌的常态：`patch-app.sh` 里 `bridge-mcp-server: skipped` 是**预期行为**——`server:build:subprocess` 只构建 `pi-agent-server` + `session-mcp-server` 两个，bridge 在仓库里没有 `dist`，装机版沿用官方原版即可。
+>
 > Baseline as of 2026-08-19: local main merged up to upstream **v0.12.0** (2026-08-18) — 0 behind, 158 custom ahead. Merge commit `568e38b8`, checkpoint 分支 `backup/main-pre-v0.12.0` @ 75a0e84d。**这版基本是一次搬家而非功能版本**：域名迁到 `thecraftagents.com`（应用/下载/自动更新源/分享链接/文档全部换址），文档站从内置 Mintlify 改为纯静态站。唯一实质变化对我们有利——**agent 不再挂载内置 `craft-agents-docs` MCP 服务器**（改为引用公开文档站），每个会话少一条常驻后台连接，`<sources>` 注入块也随之变短。
 >
 > **合并干净度**：上游真实改动 57 文件 / +621 −322，与定制交集 6 个（`ChatPage.tsx` 只改 2 行文档 URL、`SessionManager.ts` 与 `claude-agent.ts` 都只删 `craft-agents-docs` 相关块，均离定制区很远），**仅 `bun.lock` 真冲突**（`--theirs` + `bun install`）。**模型目录与 Agent/Pi SDK 版本均未变 → 无需 `server:build:subprocess`**（判据见 v0.11.4 那条）。测试基线原样复现：electron/src 972 pass / 8 fail（browser-pane-manager）；ui 340 全绿；shared 2177 pass / 13 fail；server-core 220 全绿。
