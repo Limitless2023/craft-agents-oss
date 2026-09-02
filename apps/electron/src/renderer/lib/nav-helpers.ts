@@ -20,6 +20,8 @@ import type { NavigationState } from '../../shared/types'
  * - settings: a subpage is selected (bare `settings` route → false)
  * - sources / skills / automations: a detail item is selected
  * - favorites: always true — 收藏夹是全幅内容页，没有中间导航列，始终进入内容模式
+ * - pages: always — both the library grid and a page render in the content
+ *   panel (pages has no navigator list to fall back to)
  */
 export function isDetailNavState(navState: NavigationState | null): boolean {
   if (!navState) return false
@@ -38,6 +40,9 @@ export function isDetailNavState(navState: NavigationState | null): boolean {
       return true
     case 'viz-gallery':
       // 可视化画廊同款全幅内容页
+      return true
+    case 'pages':
+      // 上游 Pages：library 网格与单页都渲染在内容面板，同样没有中间导航列
       return true
   }
 }
