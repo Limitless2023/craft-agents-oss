@@ -372,6 +372,18 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-08-30: local main merged up to upstream **v0.13.0** — 0 behind, 163 custom ahead. Merge commit `e79c0c74`, checkpoint 分支 `backup/main-pre-v0.13.0` @ 1b2b5315。**这是近期最大的一版**：上游加了整套 **Pages (Beta)**——agent 造持久化小应用（仪表盘/报表/追踪器），侧边栏新增 Pages 区、沙箱渲染、每页自带键值+时序数据存储、cron 定时刷新（不起会话不烧 token）、逐项批准的能力调用、公开分享。另修 ChatGPT Plus 登录（Pi SDK 0.81.1 之后凭据解析变了）与 Bedrock IAM 凭据链。
+>
+> **合并**：上游 147 文件 / +14577 −398，与定制交集 24 个，但**只冲突 4 处**且全是"两边各加自己的东西"：`route-parser.ts`（NavigatorType 联合 + 前缀数组，取并集）、`nav-helpers.ts`（`isDetailNavState` 的 switch，三个全幅内容页 case 并存）、`AppShell.tsx`（两处 navigatorWidth/手柄可见性——上游把 `navShownEffective` 换成了反向的 `effectiveSidebarAndNavigatorHidden` 并加 `isPagesView`，保留我们的 favorites/viz-gallery 提前归零 + 采用上游新变量）、`bun.lock`。**模型目录与 SDK 均未变 → 无需 `server:build:subprocess`**。
+>
+> ⚠️ **导航接线是长期冲突点**：我们有 favorites / viz-gallery 两个自定义 navigator，上游每加一个（board、projects、现在 pages）都会在同样这 8 处相遇。冲突性质始终是加法，解法是取并集；危险在于**合坏了类型检查也能过**（运行时点不开），所以合完必须实点一遍收藏夹和可视化画廊。
+>
+> **上游本次发版带了两个自己的破损**（不是我们合出来的，已核对 origin/main 原树）：
+> 1. `typecheck:all` 末尾 `cd ../../workers/pages` —— 那个 Cloudflare Worker **不在开源仓库里**（根目录无 `workers/`，workspaces 只声明 `packages/*`+`apps/*`），所以这条脚本从此必然失败。**八个包逐个跑全绿**，判断升级是否干净要逐包跑，别信 `typecheck:all` 的退出码。与 `build:validate` 引用不存在脚本属同类债。
+> 2. `ipc-channels.test.ts` 快照漏了自己新增的 `pages:getShareDataScan`（channels.ts 有、测试没有）。**这个我们补上了**——它是我们自己要依赖的守护（加通道必须同步更新），坏着会让下次分不清是谁的锅。`EXPECTED_COUNT` 由数组长度派生，只需往数组里按字典序插一条。
+>
+> **测试基线更新**：electron/src **1016** pass / 8 fail（补完快照后回到只剩 browser-pane）；ui 340 全绿；shared **2317** pass / 14 fail（13 基线 + 1 个上游 Pages 并发写测试 `data-write.test.ts`，**单独跑 7/0 全绿、只在全量并发下失败**，是它自己起 Bun 子进程的资源竞争，非回归）；server-core **243** 全绿。
+>
 > Baseline as of 2026-08-27: local main merged up to upstream **v0.12.1** (2026-08-26) — 0 behind, 161 custom ahead. Merge commit `17442b42`, checkpoint 分支 `backup/main-pre-v0.12.1` @ 0da51247。内容集中在 **Pi 后端**：新增 **Moonshot AI / Kimi K3**（1M 上下文、常开推理、图片输入；K2.6 作快速摘要模型）+ **Pi SDK 0.80.6→0.81.1**（刷新全部 Pi 系模型目录）+ 修 ChatGPT 网页搜索钉死退役模型 id、自定义 OpenAI 兼容端点误收 `store` 参数、WhatsApp LID 迁移账号身份识别。走 Claude 后端的话日常无感。
 >
 > **合并**：上游 53 文件 / +1855 −241，与定制交集 3 个（`apps/electron/package.json`、`AiSettingsPage.tsx`、`bun.lock`），**仅 `bun.lock` 真冲突**。⚠️ **模型目录（`config/models-pi.ts`）+ Pi SDK 双双变化 → 必须 `server:build:subprocess`**，判据见 v0.11.4 那条。**jiti 坑如期复现**：0.81.1 仍精确依赖嵌套 jiti，首次构建报 `Could not resolve "jiti/static"`，`bun install --force` 补齐后即通过（重建后子进程 bundle 里 kimi 命中 92 处）。测试基线：electron/src 972 pass / 8 fail（browser-pane-manager）；ui 340 全绿；shared **2201** pass / 13 fail（通过数 +24 为上游新增 Kimi 用例）；server-core 220 全绿。
