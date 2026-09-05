@@ -372,6 +372,12 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-09-05: local main merged up to upstream **v0.13.1** — 0 behind, 165 custom ahead. Merge commit `8165efce`, checkpoint 分支 `backup/main-pre-v0.13.1` @ d431240f。**这版就是为 Fable 5.1 来的**：`claude-fable-5-1`（2026-09-01 GA，1M 上下文、更低缓存读取价、Bedrock us/eu/global 三套 inference profile）进注册表，排在 Fable 5 上面（`shortName` 刻意与 5.1 相同并列在前，`findModelIdByShortName('Fable')` 因此解析到最新的那个）；默认仍是 Opus 4.8。顺带 **Agent SDK 0.3.220→0.3.258**（准确的 thinking-token 统计、按模型成本基准、MCP 资源链接，无破坏性改动）。
+>
+> **合并**：22 文件 / +143 −51，与定制交集**只有 2 个**（`apps/electron/package.json`、`bun.lock`），仅 `bun.lock` 真冲突——历次最干净之一。⚠️ **模型目录 + Agent SDK 双双变化 → 必须 `server:build:subprocess`**（重建后 `main.cjs` 与 `pi-agent-server` 各 12 处 `claude-fable-5-1`，版本一致）。jiti 坑本次未触发（Pi SDK 未变）。测试全部对齐基线：electron/src 1016 pass / 8 fail；ui 340 全绿；shared **2325** pass / 13 fail（通过数 +8 为上游新增 5.1 用例，失败回到 13——上次那个 Pages 并发写测试本轮未复现，进一步印证它是环境敏感而非回归）；server-core 243 全绿；上次我们补的通道快照仍全绿。
+>
+> **⚠️ 一条被证伪的诊断（值得记，避免重蹈）**：上一周 Fable 5.1 连不上时，我判断根因是"Agent SDK 里没有这个模型 id"，依据是 `grep claude-fable-5-1` 在 SDK 包里零命中。**这个判断是错的**——SDK 里的模型 id 清单最新只到 `claude-4-opus-20250514`，连 Opus 4.8 / Sonnet 5 / Fable 5 这些日常在用的模型**全都不在里面**：**Agent SDK 根本不维护模型白名单，只把 model 字符串透传给 API**。真实根因是 `packages/shared/src/config/models.ts` 的 `MODEL_REGISTRY` 里没有该条目（模型 id 由 Anthropic `/v1/models` 实时返回并写进连接列表，所以能出现在选择器里，但注册表缺条目 → 上下文窗口等元数据取不到）。**判据修正：模型可用性看 `MODEL_REGISTRY`，不看 SDK 包里 grep 得到什么；对某个包"有没有某字符串"下结论前，先确认那个包是否本来就该有同类字符串（拿已知可用的同类项做对照组）。**
+>
 > Baseline as of 2026-08-30: local main merged up to upstream **v0.13.0** — 0 behind, 163 custom ahead. Merge commit `e79c0c74`, checkpoint 分支 `backup/main-pre-v0.13.0` @ 1b2b5315。**这是近期最大的一版**：上游加了整套 **Pages (Beta)**——agent 造持久化小应用（仪表盘/报表/追踪器），侧边栏新增 Pages 区、沙箱渲染、每页自带键值+时序数据存储、cron 定时刷新（不起会话不烧 token）、逐项批准的能力调用、公开分享。另修 ChatGPT Plus 登录（Pi SDK 0.81.1 之后凭据解析变了）与 Bedrock IAM 凭据链。
 >
 > **合并**：上游 147 文件 / +14577 −398，与定制交集 24 个，但**只冲突 4 处**且全是"两边各加自己的东西"：`route-parser.ts`（NavigatorType 联合 + 前缀数组，取并集）、`nav-helpers.ts`（`isDetailNavState` 的 switch，三个全幅内容页 case 并存）、`AppShell.tsx`（两处 navigatorWidth/手柄可见性——上游把 `navShownEffective` 换成了反向的 `effectiveSidebarAndNavigatorHidden` 并加 `isPagesView`，保留我们的 favorites/viz-gallery 提前归零 + 采用上游新变量）、`bun.lock`。**模型目录与 SDK 均未变 → 无需 `server:build:subprocess`**。
