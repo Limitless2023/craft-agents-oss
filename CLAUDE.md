@@ -372,6 +372,14 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-09-13: local main merged up to upstream **v0.13.3**（跳过 v0.13.2）— 0 behind, 167 custom ahead. Merge commit `34592143`, checkpoint 分支 `backup/main-pre-v0.13.3` @ 768cdd20。**主题是韧性而非新功能**：Pi 后端对话遇到临时限流/供应商故障/连接中断**不再立刻报错**，保持打开并显示重试进度（主对话最多 4 次退避重试 + 2 次预流重试，退避中按停止可干净取消）；配套修了一个要紧的 bug——**重试成功产出的回复此前会丢失**（第一次报错后 SDK 重试拿到的答案送不进对话），失败的半截回复现在被丢弃而非混入后续尝试。另有 `call_llm`/标题/摘要加执行截止时间（超时只取消自己的子进程）、工作目录的 `.pi/settings.json` 不再能静默覆盖 Craft 的重试与压缩设置、新增 **GPT-6 Astra**（OpenAI 连接）。**Pi SDK 0.81.1 → 0.85.1**（跨 4 版）。
+>
+> **合并**：63 文件 / +3539 −1003，与定制交集 9 个，但**只冲突 2 处**——`bun.lock` 与 **`tsconfig.base.json`（add/add）**。后者值得记：我们那份是 `chore: align repo with upstream v0.7.1` 继承来的**上游旧副本、并非定制**，上游删掉后又用新内容加回（ESNext/bundler → ES2022/NodeNext），**取上游版**。⚠️ **Pi SDK 跨 4 版 → 必须 `server:build:subprocess`**，**jiti 坑如期复现**（0.85.1 仍精确依赖嵌套 jiti），`bun install --force` 后通过。核对两侧同步：`main.cjs` 与 `pi-agent-server` 分别 9 / 10 处 `gpt-6-astra`。
+>
+> **一个吓人但无害的发现**：新 `tsconfig.base.json` 去掉了 `allowImportingTsExtensions`，导致 `packages/session-mcp-server` 单独跑 `tsc --noEmit` 报 **90 个 TS5097**。**属上游既有、且不影响交付**——该包**从来不在任何 typecheck 口径里**（`typecheck:all` 不含它，它自己的 package.json 也只有 `build`/`dev` 两个脚本），真实构建路径是 `bun build`（不做类型检查），实测正常产出 4.57MB bundle。我是自作主张多跑了一条命令才看到的。**判据：逐包验证时以各包自己声明的脚本为准，别给没有 typecheck 脚本的包硬跑 tsc——那不是它的契约。**
+>
+> **测试基线更新**：electron/src **1028** pass / 8 fail；ui 340 全绿；shared **2348** pass / 13 fail；server-core **247** 全绿（通过数普涨为上游新增的重试用例）。
+>
 > Baseline as of 2026-09-05: local main merged up to upstream **v0.13.1** — 0 behind, 165 custom ahead. Merge commit `8165efce`, checkpoint 分支 `backup/main-pre-v0.13.1` @ d431240f。**这版就是为 Fable 5.1 来的**：`claude-fable-5-1`（2026-09-01 GA，1M 上下文、更低缓存读取价、Bedrock us/eu/global 三套 inference profile）进注册表，排在 Fable 5 上面（`shortName` 刻意与 5.1 相同并列在前，`findModelIdByShortName('Fable')` 因此解析到最新的那个）；默认仍是 Opus 4.8。顺带 **Agent SDK 0.3.220→0.3.258**（准确的 thinking-token 统计、按模型成本基准、MCP 资源链接，无破坏性改动）。
 >
 > **合并**：22 文件 / +143 −51，与定制交集**只有 2 个**（`apps/electron/package.json`、`bun.lock`），仅 `bun.lock` 真冲突——历次最干净之一。⚠️ **模型目录 + Agent SDK 双双变化 → 必须 `server:build:subprocess`**（重建后 `main.cjs` 与 `pi-agent-server` 各 12 处 `claude-fable-5-1`，版本一致）。jiti 坑本次未触发（Pi SDK 未变）。测试全部对齐基线：electron/src 1016 pass / 8 fail；ui 340 全绿；shared **2325** pass / 13 fail（通过数 +8 为上游新增 5.1 用例，失败回到 13——上次那个 Pages 并发写测试本轮未复现，进一步印证它是环境敏感而非回归）；server-core 243 全绿；上次我们补的通道快照仍全绿。
