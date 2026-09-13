@@ -25,6 +25,7 @@ import type {
   CredentialRequestEvent,
   PlanSubmittedEvent,
   StatusEvent,
+  RetryEvent,
   InfoEvent,
   InterruptedEvent,
   TitleGeneratedEvent,
@@ -45,7 +46,7 @@ import type {
   Effect,
 } from '../types'
 import type { Message } from '../../../shared/types'
-import { generateMessageId, appendMessage } from '../helpers'
+import { generateMessageId, appendMessage, clearRetryStatus } from '../helpers'
 
 /**
  * Handle complete - agent loop finished
@@ -57,7 +58,7 @@ export function handleComplete(
   state: SessionState,
   event: CompleteEvent
 ): ProcessResult {
-  const { session } = state
+  const session = clearRetryStatus(state.session)
 
   // Fail-safe: mark any non-terminal tools as complete.
   // Catches 'executing' (normal) and 'backgrounded' (spurious — e.g. foreground Agent
@@ -124,7 +125,7 @@ export function handleError(
   state: SessionState,
   event: ErrorEvent
 ): ProcessResult {
-  const { session } = state
+  const session = clearRetryStatus(state.session)
 
   // Fail-safe: Mark any running tools as failed
   const messagesWithFailedTools = session.messages.map(m =>
@@ -162,7 +163,7 @@ export function handleTypedError(
   state: SessionState,
   event: TypedErrorEvent
 ): ProcessResult {
-  const { session } = state
+  const session = clearRetryStatus(state.session)
 
   // Fail-safe: Mark any running tools as failed
   const messagesWithFailedTools = session.messages.map(m =>
@@ -202,6 +203,36 @@ export function handleTypedError(
         agentState: null,
       },
       streaming: null,
+    },
+    effects: [],
+  }
+}
+
+/**
+ * Retry progress is transient, not transcript history. Only SDK lifecycle
+ * events may end backoff — a delayed token/tool event is not proof of recovery.
+ */
+export function handleRetry(state: SessionState, event: RetryEvent): ProcessResult {
+  const session = clearRetryStatus(state.session)
+  if (event.phase !== 'backoff') {
+    return { state: { session, streaming: state.streaming }, effects: [] }
+  }
+
+  // Replace prior progress rather than accumulating a running row per attempt.
+  const retryMessage: Message = {
+    id: generateMessageId(),
+    role: 'status',
+    statusType: 'retrying',
+    content: event.message,
+    timestamp: Date.now(),
+  }
+  return {
+    state: {
+      session: {
+        ...appendMessage(session, retryMessage),
+        currentStatus: { message: event.message, statusType: 'retrying' },
+      },
+      streaming: state.streaming,
     },
     effects: [],
   }
