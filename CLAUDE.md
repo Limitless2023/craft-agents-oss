@@ -372,6 +372,16 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-09-23: local main merged up to upstream **v0.13.4**（2026-09-20 发版）— 0 behind, 169 custom ahead. Merge commit `da79653d`, checkpoint 分支 `backup/main-pre-v0.13.4` @ 76642438。三个修复 + 一处系统提示词增强：**中途连发的 steering 指令不再被吞**（#1040，改为回合级队列在每个工具边界按序投递，此前只有最后一条生效）、**Claude 连接的上下文用量终于准了**（#1043，此前只读一种 usage 形态导致数字错或陈旧；压缩边界现在会作废旧总数）、移动端 composer 不再被大字号挤出视口（#1038）。系统提示词新增**结构化开发环境上下文**（当前 git 分支、工作区状态、最近提交）——注意这会让轨迹视图的注入块多一段。**模型目录与 SDK 均未变 → 无需 `server:build:subprocess`**。
+>
+> **合并**：96 文件 / +3366 −1002，与定制交集 21 个，**冲突 4 处**——三处是并集型（`core/types/message.ts` 我们的 `agent_state`/`AgentStreamState` 与上游三个新事件并存；`ChatDisplay.tsx` 的 `contextUsage` + `costUsd` 都要透传；`claude/event-adapter.ts` 的 spinner 状态位与上游手动压缩状态位各留各的）。
+>
+> ⚠️ **第四处是真正的"定制被重构冲掉"**：上游把 context 显示抽成了新模块 `input/context-display.ts`（`ContextStatus` 接口 + `getContextDisplay`/`getContextDisplayLabels`，注释写明"Shared text contract keeps desktop and compact/mobile labels identical"），而我们的会话费用 `· $x.xx` 正贴在被抽走的那段内联 JSX 上。**解法不是并集而是迁移**：把 `costUsd?: number` 加进上游的 `ContextStatus` 接口（最小侵入的加法），费用 span 改贴在 `contextLabels.usage` 之后。迁移时踩了一下——照搬旧写法用了 `contextStatus.costUsd`，而上游同区已改用可选链 `contextStatus?.isCompacting`，类型检查报 5 个 TS18048；跟着改成可选链即可。**判据：上游把我们改过的代码抽成模块时，定制要"搬进新结构"而不是"贴回旧位置"，并抄邻近代码的写法（可选链/守卫）而非沿用合并前的。**
+>
+> **上游又带了一个自己的破损**（已用 worktree 在**纯净 origin/main 树**上复现 2 pass / 1 fail，确非我方引入）：`prompt-builder-context-split.test.ts` 的 "buildContextParts equals [...volatile, ...stable]" 断言两次调用字节相同，而新加的 `formatVolatileGitDeveloperContext`（工作区状态/最近提交）每次调用现读 git，前提被自己的新功能打破。**归属判定手法值得复用：`git diff --quiet origin/main -- <file>` 确认我方未改动 + 临时 worktree 检出上游原树复跑**，比猜测可靠。
+>
+> **测试基线更新**：electron/src **1054** pass / 8 fail（browser-pane-manager 照旧）；ui 340 全绿；shared **2399** pass / **14 fail**（13 基线 + 上述上游新破损）；server-core **258** 全绿。
+>
 > Baseline as of 2026-09-13: local main merged up to upstream **v0.13.3**（跳过 v0.13.2）— 0 behind, 167 custom ahead. Merge commit `34592143`, checkpoint 分支 `backup/main-pre-v0.13.3` @ 768cdd20。**主题是韧性而非新功能**：Pi 后端对话遇到临时限流/供应商故障/连接中断**不再立刻报错**，保持打开并显示重试进度（主对话最多 4 次退避重试 + 2 次预流重试，退避中按停止可干净取消）；配套修了一个要紧的 bug——**重试成功产出的回复此前会丢失**（第一次报错后 SDK 重试拿到的答案送不进对话），失败的半截回复现在被丢弃而非混入后续尝试。另有 `call_llm`/标题/摘要加执行截止时间（超时只取消自己的子进程）、工作目录的 `.pi/settings.json` 不再能静默覆盖 Craft 的重试与压缩设置、新增 **GPT-6 Astra**（OpenAI 连接）。**Pi SDK 0.81.1 → 0.85.1**（跨 4 版）。
 >
 > **合并**：63 文件 / +3539 −1003，与定制交集 9 个，但**只冲突 2 处**——`bun.lock` 与 **`tsconfig.base.json`（add/add）**。后者值得记：我们那份是 `chore: align repo with upstream v0.7.1` 继承来的**上游旧副本、并非定制**，上游删掉后又用新内容加回（ESNext/bundler → ES2022/NodeNext），**取上游版**。⚠️ **Pi SDK 跨 4 版 → 必须 `server:build:subprocess`**，**jiti 坑如期复现**（0.85.1 仍精确依赖嵌套 jiti），`bun install --force` 后通过。核对两侧同步：`main.cjs` 与 `pi-agent-server` 分别 9 / 10 处 `gpt-6-astra`。
