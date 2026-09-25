@@ -108,6 +108,11 @@ function SummaryTab({ entry }: { entry: TrajectoryEntry }) {
   const { t } = useTranslation()
   return (
     <dl className="space-y-1.5 text-[12px]">
+      {entry.supersededBySnapshot && (
+        <div className="mb-2 rounded-[6px] border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+          {t('trajectory.supersededBySnapshot')}
+        </div>
+      )}
       <Row label={t('trajectory.field.source')} value={entry.source} mono />
       <Row label={t('trajectory.field.chars')} value={entry.charCount.toLocaleString()} />
       {entry.model && <Row label={t('trajectory.field.model')} value={entry.model} mono />}

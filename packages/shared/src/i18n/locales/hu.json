@@ -1781,6 +1781,7 @@
   "trajectory.stat.turns": "{{n}} kör",
   "trajectory.step": "{{n}}. lépés",
   "trajectory.subtitle": "{{count}} karakternyi kontextus",
+  "trajectory.supersededBySnapshot": "Előállítva, de valószínűleg nem került kézbesítésre: az SDK az első körben pillanatképet készít a rendszerpromptról, és tömörítésig azt küldi tovább. Ezt a későbbi változatot a Craft állította össze, a modell valószínűleg sosem látta.",
   "trajectory.tab.content": "Tartalom",
   "trajectory.tab.payload": "Bemenet",
   "trajectory.tab.raw": "Nyers",

@@ -1781,6 +1781,7 @@
   "trajectory.stat.turns": "{{n}} tur",
   "trajectory.step": "Krok {{n}}",
   "trajectory.subtitle": "{{count}} znaków kontekstu",
+  "trajectory.supersededBySnapshot": "Wygenerowano, ale prawdopodobnie nie dostarczono: SDK tworzy migawkę promptu systemowego w pierwszej turze i wysyła ją aż do kompaktowania. Tę późniejszą wersję złożył Craft, ale model najprawdopodobniej jej nie zobaczył.",
   "trajectory.tab.content": "Treść",
   "trajectory.tab.payload": "Wejście",
   "trajectory.tab.raw": "Surowe",

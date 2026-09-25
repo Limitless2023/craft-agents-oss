@@ -1781,6 +1781,7 @@
   "trajectory.stat.turns": "{{n}} ターン",
   "trajectory.step": "ステップ {{n}}",
   "trajectory.subtitle": "コンテキスト {{count}} 文字",
+  "trajectory.supersededBySnapshot": "生成されましたが、モデルには届いていない可能性が高い：SDK は初回ターンでシステムプロンプトのスナップショットを取り、圧縮が起きるまでそれを送り続けます。このバージョンは後から Craft が組み立てたもので、モデルは見ていない可能性があります。",
   "trajectory.tab.content": "本文",
   "trajectory.tab.payload": "入力",
   "trajectory.tab.raw": "生データ",

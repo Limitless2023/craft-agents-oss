@@ -319,6 +319,22 @@ describe('第二档：系统提示词 sidecar', () => {
     expect(out[0]!.charCount).toBe(3)
   })
 
+  test('supersededBySnapshot 原样透传——SDK 快照下这一版多半没送达模型', () => {
+    const out = parseSystemPromptSidecar(
+      [
+        JSON.stringify({ timestamp: '2026-09-25T00:00:00.000Z', sha: 'a', text: '首轮那份' }),
+        JSON.stringify({
+          timestamp: '2026-09-25T01:00:00.000Z',
+          sha: 'b',
+          text: 'git 上下文变了以后的那份',
+          supersededBySnapshot: true,
+        }),
+      ].join('\n')
+    )
+    expect(out[0]!.supersededBySnapshot).toBe(false)
+    expect(out[1]!.supersededBySnapshot).toBe(true)
+  })
+
   test('一律置顶并重排 index（index 是 UI 的选中键，必须唯一连续）', () => {
     const main = parseTrajectory(sampleJsonl())
     const sp = parseSystemPromptSidecar(

@@ -81,6 +81,13 @@ export interface TrajectoryEntry {
   endMs?: number
   durationMs?: number
 
+  /**
+   * 仅系统提示词条目：本条是**后来才渲染出来的另一版**，而 SDK 的
+   * `systemPrompt.snapshot: true` 仍在发首轮那一份——即"渲染过但多半没送达模型"。
+   * 常见成因：上游 v0.13.4 起 append 含现读 git 的工作区上下文，commit 后 resume 必变。
+   */
+  supersededBySnapshot?: boolean
+
   // —— 工具专属 ——————————————————————————————————————————————
   toolUseId?: string
   toolName?: string
@@ -371,6 +378,7 @@ export function parseSystemPromptSidecar(jsonl: string): TrajectoryEntry[] {
       startMs: Number.isFinite(startMs) ? startMs : undefined,
       endMs: Number.isFinite(startMs) ? startMs : undefined,
       model: typeof row.model === 'string' ? row.model : undefined,
+      supersededBySnapshot: row.supersededBySnapshot === true,
     })
   }
   return out

@@ -1781,6 +1781,7 @@
   "trajectory.stat.turns": "{{n}} Runden",
   "trajectory.step": "Schritt {{n}}",
   "trajectory.subtitle": "{{count}} Zeichen Kontext",
+  "trajectory.supersededBySnapshot": "Erzeugt, aber vermutlich nicht zugestellt: Das SDK erstellt beim ersten Zug einen Snapshot des System-Prompts und sendet weiterhin diesen, bis eine Komprimierung erfolgt. Diese spätere Fassung stammt von Craft, das Modell hat sie wahrscheinlich nie gesehen.",
   "trajectory.tab.content": "Inhalt",
   "trajectory.tab.payload": "Eingabe",
   "trajectory.tab.raw": "Roh",

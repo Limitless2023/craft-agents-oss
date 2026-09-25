@@ -1781,6 +1781,7 @@
   "trajectory.stat.turns": "{{n}} turnos",
   "trajectory.step": "Paso {{n}}",
   "trajectory.subtitle": "{{count}} caracteres de contexto",
+  "trajectory.supersededBySnapshot": "Generado, pero probablemente no entregado: el SDK toma una instantánea del prompt del sistema en el primer turno y sigue enviando esa hasta que hay una compactación. Esta versión posterior la compuso Craft, pero es probable que el modelo nunca la viera.",
   "trajectory.tab.content": "Contenido",
   "trajectory.tab.payload": "Entrada",
   "trajectory.tab.raw": "Bruto",

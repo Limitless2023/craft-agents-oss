@@ -10,6 +10,8 @@ Claude SDK 自己就在 `~/.claude/projects/<slug>/<sdkSessionId>.jsonl` 写了�
 
 唯一的例外是系统提示词——那段由 craft 在建请求时拼装，SDK 不知道，因此 `packages/shared/src/sessions/system-prompt-record.ts` 在 `claude-agent.ts` 的 options 构造点补写一份 sidecar（`<会话>/meta/system-prompt.jsonl`，内容寻址、变了才追加）。渲染层把两个源合并。
 
+**⚠️ snapshot 语义（上游 v0.13.5 起）**：SDK options 带 `systemPrompt.snapshot: true` —— **首轮渲染的那一份会被原样重发给之后每一次请求和 resume**，同一 SDK 会话里不同的 append 一概忽略，直到一次压缩才重新取。所以 sidecar 里**第一条才是权威的**，之后追加的条目打 `supersededBySnapshot: true`，详情页顶部显示琥珀色提示条。这个情形**并不罕见**：上游 v0.13.4 给 append 加了现读 git 的工作区上下文（分支/状态/最近提交），任何一次 commit 之后 resume 会话都会产生新的一版。不标注就等于拿一份模型没见过的提示词冒充"模型实际收到了什么"——那正是本模块唯一的卖点。
+
 **仍读不到**：Claude Code 基座预设与工具定义在 SDK 内部。UI 里明写盲区，不假装完整。
 
 ## 成员清单

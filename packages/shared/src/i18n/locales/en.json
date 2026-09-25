@@ -1781,6 +1781,7 @@
   "trajectory.stat.turns": "{{n}} turns",
   "trajectory.step": "Step {{n}}",
   "trajectory.subtitle": "{{count}} characters of context",
+  "trajectory.supersededBySnapshot": "Rendered but probably not delivered: the SDK snapshots the system prompt on the first turn and keeps sending that one until a compaction. This later version was composed by Craft but the model likely never saw it.",
   "trajectory.tab.content": "Content",
   "trajectory.tab.payload": "Payload",
   "trajectory.tab.raw": "Raw",

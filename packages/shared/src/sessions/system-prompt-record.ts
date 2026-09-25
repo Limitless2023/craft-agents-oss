@@ -6,6 +6,11 @@
  *        刻意只做"变了才追加"：系统提示词一个会话内通常一成不变，逐轮全量写会让
  *        sidecar 比会话本身还大。读取端在 renderer/lib/trajectory-core.ts。
  *        写失败一律静默——这是可视化用的旁路数据，绝不能让它拖垮一次真实对话。
+ *        ⚠️ 自上游 v0.13.5 起 SDK options 带 `systemPrompt.snapshot: true`：**SDK 只把
+ *        首轮渲染的那一份原样发给模型**，同一 SDK 会话后续launch 里不同的 append 会被忽略，
+ *        直到一次压缩才重新取。因此本文件里**第一条是权威的**，之后因内容变化追加的条目
+ *        标记 `supersededBySnapshot: true`——它们被渲染过，但很可能没真正送达模型。
+ *        轨迹视图声称的是"模型实际收到了什么"，不标注就是在撒谎。
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -55,6 +60,9 @@ export function recordSystemPrompt(
   const fp = fingerprint(text);
   if (lastFingerprint.get(key) === fp) return;
 
+  /** 盘上已有条目且内容不同 → 这一版多半没送达模型（见头部 snapshot 说明）。 */
+  let superseded = false;
+
   try {
     const dir = join(getSessionPath(workspaceRootPath, sessionId), 'meta');
     const file = join(dir, 'system-prompt.jsonl');
@@ -70,6 +78,8 @@ export function recordSystemPrompt(
             lastFingerprint.set(key, fp);
             return;
           }
+          // 已有一条不同内容的记录 → SDK 的 snapshot 仍在发那一条
+          superseded = true;
         } catch {
           // 坏行忽略，照常追加新的
         }
@@ -84,6 +94,7 @@ export function recordSystemPrompt(
         sha: fp,
         chars: text.length,
         source: meta.source ?? 'craft-append',
+        ...(superseded ? { supersededBySnapshot: true } : {}),
         ...(meta.model ? { model: meta.model } : {}),
         text,
       }) + '\n',

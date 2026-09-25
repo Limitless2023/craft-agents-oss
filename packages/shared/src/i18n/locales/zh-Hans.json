@@ -1781,6 +1781,7 @@
   "trajectory.stat.turns": "{{n}} 轮",
   "trajectory.step": "第 {{n}} 步",
   "trajectory.subtitle": "上下文共 {{count}} 字符",
+  "trajectory.supersededBySnapshot": "渲染过，但多半没送达模型：SDK 在首轮为系统提示词拍了快照，之后一直发那一份，直到一次压缩才刷新。这一版是 Craft 后来拼出来的，模型很可能没见过。",
   "trajectory.tab.content": "正文",
   "trajectory.tab.payload": "入参",
   "trajectory.tab.raw": "原始",
