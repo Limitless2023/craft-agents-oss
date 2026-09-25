@@ -311,6 +311,8 @@ Preview 面板不再是 `.md` 专属：**代码/文本/JSON 文件点开后默�
 
 **第二档（系统提示词）**：SDK transcript 唯一缺的就是系统提示词——那段由 craft 在建请求时拼装，只有它自己知道。`packages/shared/src/sessions/system-prompt-record.ts` 在 `claude-agent.ts` 的 SDK options 构造点补写 sidecar `<会话>/meta/system-prompt.jsonl`：**内容寻址、变了才追加**（稳定不变的提示词一个会话只写一次），进程内缓存指纹 + 重启后比对盘上末行，写失败一律静默（旁路数据绝不能拖垮真实对话）。渲染层 `mergeTrajectory` 把它**置顶**（不按时间插：它是会话级常量，从第一个 token 起就在起作用，只是我们直到某轮才抄下来；按记录时刻插会埋进对话中间且被无时间戳条目拽偏——初版的真 bug），同理不上时间轴泳道。剩余盲区收窄为「Claude Code 基座预设与工具定义」。
 
+**⚠️ snapshot 语义（上游 v0.13.5 起）**：SDK options 带 `systemPrompt.snapshot: true` —— **首轮渲染的那一份原样重发给之后每一次请求和 resume**，同一 SDK 会话里不同的 append 一概忽略，直到一次压缩才刷新。所以 sidecar 里**第一条才是权威的**，之后追加的条目打 `supersededBySnapshot: true`，详情页概览顶部显示琥珀色提示条。这不是理论情形：v0.13.4 起 append 含现读 git 的工作区上下文，commit 之后 resume 必然产生新的一版。
+
 **五个实测踩坑（都有测试守护）**：
 1. slug 规则是斜杠**和**点号都替换为连字符，只替换斜杠找不到文件；
 2. 工具结果也是 `user` 角色，回合分组必须排除它，否则每个工具结果都算一次新提问；
@@ -372,6 +374,18 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-09-25: local main merged up to upstream **v0.13.5**（2026-09-24 发版）— 0 behind, 171 custom ahead. Merge commit `dc7dcc64`, checkpoint 分支 `backup/main-pre-v0.13.5` @ 9ebaefd5。**这版的主角是 Claude Opus 5.5**（`claude-opus-5-5`）——进注册表并成为**新的默认模型**（此前默认 Opus 4.8）。双 SDK 同时升：**Agent SDK 0.3.258→0.3.280**、**Pi SDK 0.85.1→0.87.1**，⚠️ **必须 `server:build:subprocess`**（重建后子进程 bundle 命中 17 处 `claude-opus-5-5`，main.cjs 18 处）。**jiti 坑第四次复现**（0.87.1 仍精确依赖嵌套 jiti 2.7.0），照例 `bun install --force` 后通过。
+>
+> **合并**：仅 `bun.lock` 冲突，`claude-agent.ts` 自动合并干净。8 个包 typecheck 全 0 错。
+>
+> ⚠️ **`systemPrompt.snapshot: true` —— 本次唯一需要我们改代码的地方**：上游给 SDK options 的 systemPrompt 加了 `snapshot: true`，语义是**首轮渲染的那一份会被原样重发给之后每一次请求和 resume**，同一 SDK 会话里不同的 append 一概忽略，直到一次压缩才刷新。而我们轨迹视图第二档的 sidecar（`system-prompt-record.ts`）是"内容变了就追加"——于是可能记下一份**模型根本没收到**的提示词，而这个模块唯一的卖点就是"模型实际收到了什么"。**这个情形还不罕见**：v0.13.4 上游给 append 加了现读 git 的工作区上下文（分支/状态/最近提交），任何一次 commit 之后 resume 会话都会产生新的一版。修法是最小的诚实化——盘上已有不同内容时照常追加，但打 `supersededBySnapshot: true`，解析层透传、详情页概览顶部显示琥珀色提示条（i18n +1 键 ×7），**第一条才是权威的**。**判据：上游改的是"我们的数据源语义"而不是我们的代码时，编译器不会报任何错——每次升级都要问一遍"上游这个新选项，会不会让我记录的东西不再等于事实"。**
+>
+> **两个上游自带的测试失败**（都已核对非我方引入）：
+> 1. `prompt-builder-context-split.test.ts` 的 volatile/stable 断言——v0.13.4 就坏了，**本版上游仍未修**（成因见 v0.13.4 那条：新加的 git 上下文每次现读，打破了它自己"两次调用字节相同"的前提）。
+> 2. **新增** `E2E: OAuth Metadata Discovery > GitHub MCP (api.githubcopilot.com)`——真实的 5000ms 网络超时，GitHub 那三个 `.well-known/oauth-authorization-server` 现在全 404，同文件里 Linear 的发现正常通过。已用 `git diff --quiet origin/main -- <file>` 确认该文件与上游逐字节相同：**上游自有、且依赖外网状态**，与合并无关。
+>
+> **测试基线更新**：electron/src **1055** pass / 8 fail（browser-pane-manager 照旧；+1 为本次新增的 supersededBySnapshot 用例）；ui 340 全绿；shared **2418** pass / **15 fail**（13 基线 + 上述两条）；server-core 258 全绿。
+>
 > Baseline as of 2026-09-23: local main merged up to upstream **v0.13.4**（2026-09-20 发版）— 0 behind, 169 custom ahead. Merge commit `da79653d`, checkpoint 分支 `backup/main-pre-v0.13.4` @ 76642438。三个修复 + 一处系统提示词增强：**中途连发的 steering 指令不再被吞**（#1040，改为回合级队列在每个工具边界按序投递，此前只有最后一条生效）、**Claude 连接的上下文用量终于准了**（#1043，此前只读一种 usage 形态导致数字错或陈旧；压缩边界现在会作废旧总数）、移动端 composer 不再被大字号挤出视口（#1038）。系统提示词新增**结构化开发环境上下文**（当前 git 分支、工作区状态、最近提交）——注意这会让轨迹视图的注入块多一段。**模型目录与 SDK 均未变 → 无需 `server:build:subprocess`**。
 >
 > **合并**：96 文件 / +3366 −1002，与定制交集 21 个，**冲突 4 处**——三处是并集型（`core/types/message.ts` 我们的 `agent_state`/`AgentStreamState` 与上游三个新事件并存；`ChatDisplay.tsx` 的 `contextUsage` + `costUsd` 都要透传；`claude/event-adapter.ts` 的 spinner 状态位与上游手动压缩状态位各留各的）。
