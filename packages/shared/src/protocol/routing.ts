@@ -334,6 +334,17 @@ export const REMOTE_ELIGIBLE_CHANNELS = new Set<string>([
   RPC_CHANNELS.settings.GET_DEFAULT_THINKING_LEVEL,
   RPC_CHANNELS.settings.SET_DEFAULT_THINKING_LEVEL,
 
+  // decisions — the decision layer's settings and keys live on the server whose sessions ask the
+  // model (it can reuse that server's LLM connections); the Laya probe tests what that server reaches
+  RPC_CHANNELS.decisions.GET_SETTINGS,
+  RPC_CHANNELS.decisions.SET_SETTINGS,
+  RPC_CHANNELS.decisions.GET_STATUS,
+  RPC_CHANNELS.decisions.SET_API_KEY,
+  RPC_CHANNELS.decisions.DELETE_API_KEY,
+  RPC_CHANNELS.decisions.TEST,
+  RPC_CHANNELS.decisions.PROBE_SERVER,
+  RPC_CHANNELS.decisions.GET_USAGE,
+
   // pi — provider config on workspace server
   RPC_CHANNELS.pi.GET_API_KEY_PROVIDERS,
   RPC_CHANNELS.pi.GET_PROVIDER_BASE_URL,

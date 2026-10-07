@@ -312,6 +312,28 @@ describe('ClaudeEventAdapter', () => {
       });
     });
 
+    // SDK 0.3.280 sends a heartbeat every 30 s for a long tool; each one used to add a
+    // "Running call_llm…" row that never finished.
+    it('reports heartbeat progress on the running tool without adding a tool row', async () => {
+      await adapter.adapt({
+        type: 'assistant',
+        message: { id: 'msg-1', content: [{ type: 'tool_use', id: 'toolu_1', name: 'mcp__session__call_llm', input: { prompt: 'x' } }] },
+        parent_tool_use_id: null,
+        session_id: 'sess-1',
+      } as any);
+      const events = await adapter.adapt({
+        type: 'tool_progress',
+        tool_use_id: 'toolu_1-heartbeat-0',
+        tool_name: 'mcp__session__call_llm',
+        parent_tool_use_id: 'toolu_1',
+        elapsed_time_seconds: 30,
+        session_id: 'sess-1',
+      } as any);
+
+      expect(events.filter(e => e.type === 'tool_start')).toEqual([]);
+      expect(events.find(e => e.type === 'task_progress')).toMatchObject({ toolUseId: 'toolu_1', elapsedSeconds: 30 });
+    });
+
     it('should use tool_use_id when no parent', async () => {
       const events = await adapter.adapt({
         type: 'tool_progress',
@@ -933,5 +955,17 @@ describe('buildWindowsSkillsDirError', () => {
   it('should return null for non-matching errors', () => {
     expect(buildWindowsSkillsDirError('Connection refused')).toBeNull();
     expect(buildWindowsSkillsDirError('ENOENT: no such file, /tmp/other')).toBeNull();
+  });
+});
+
+describe('ClaudeEventAdapter manual compaction flag', () => {
+  it('reports a requested manual compaction until the next turn starts (#1058)', () => {
+    const adapter = new ClaudeEventAdapter(createCallbacks());
+    adapter.startTurn();
+    expect(adapter.isManualCompactionRequested()).toBe(false);
+    adapter.expectManualCompaction();
+    expect(adapter.isManualCompactionRequested()).toBe(true);
+    adapter.startTurn();
+    expect(adapter.isManualCompactionRequested()).toBe(false);
   });
 });

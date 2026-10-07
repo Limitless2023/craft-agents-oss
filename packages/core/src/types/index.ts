@@ -48,6 +48,7 @@ export type {
   ErrorCode,
   TypedError,
   PermissionRequest,
+  PermissionRisk,
   AgentEvent,
   AgentStreamState,
   // Auth-related types

@@ -301,7 +301,6 @@ export interface SessionToolContext {
   /**
    * Update user preferences. Injected by each backend:
    * - Claude: calls updatePreferences() from config/preferences.ts
-   * - Codex/session-mcp-server: writes directly to preferences.json
    * - Pi: calls updatePreferences() from config/preferences.ts
    */
   updatePreferences?(updates: Record<string, unknown>): void;
@@ -361,6 +360,19 @@ export interface SessionToolContext {
    * gracefully.
    */
   pages?: PagesToolCallbacks;
+
+  // ============================================================
+  // Decision model (decide)
+  // ============================================================
+
+  /**
+   * Decision-layer callback for the `decide` tool (Jev / System One typed
+   * judgments over text or JSON). Injected by the backend (SessionManager)
+   * from @craft-agent/shared/decisions; undefined in backends that don't run
+   * alongside it — the handler tells the agent how the user can enable it.
+   * Answers are hints for the agent and never grant authority.
+   */
+  decide?: DecisionToolCallbacks;
 
   // ============================================================
   // Inter-Session Messaging
@@ -646,6 +658,72 @@ export interface PagesToolCallbacks {
   deletePage(slug: string): Promise<DeletePageToolResult>;
 }
 
+// ============================================================
+// Decision Tool Types (mirror @craft-agent/shared/decisions — this package
+// must stay free of that dependency, same rule as pages)
+// ============================================================
+
+export type DecisionToolQuestionType = 'choice' | 'score' | 'noul';
+
+/** A sentence, or a small structured object such as { question, focus }. */
+export type DecisionToolInstructions = string | Record<string, unknown>;
+
+/**
+ * choice: option key → description (string, structured object, or null when self-explanatory).
+ * score: ordered array of level descriptions, lowest first.
+ * noul: optional { true, false } descriptions.
+ */
+export type DecisionToolCriteria =
+  | Record<string, string | null | Record<string, unknown>>
+  | Array<string | Record<string, unknown>>;
+
+export interface DecisionToolQuestion {
+  type: DecisionToolQuestionType;
+  instructions: DecisionToolInstructions;
+  criteria?: DecisionToolCriteria;
+}
+
+/** Text, a JSON object, or an array of text values. */
+export type DecisionToolState = string | Record<string, unknown> | unknown[];
+
+export interface DecisionToolRequest {
+  state: DecisionToolState;
+  questions: Record<string, DecisionToolQuestion>;
+  /** Wall-clock budget for the call, in ms. */
+  deadlineMs?: number;
+  /** Caller context written to the decision record (redacted by key name). Never the state. */
+  meta?: Record<string, unknown>;
+}
+
+export type DecisionToolAnswer =
+  | { type: 'choice'; choice: string; confidence: number; probabilities: Record<string, number> }
+  | { type: 'score'; score: number; confidence: number; probabilities: Record<string, number>; legend?: Record<string, unknown> }
+  | { type: 'noul'; noul: number };
+
+export interface DecisionToolUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** Failure the agent may see. Never contains the API key or the state. */
+export interface DecisionToolError {
+  kind: string;
+  message: string;
+  status?: number;
+}
+
+export type DecisionToolResult =
+  | { ok: true; model: string; answers: Record<string, DecisionToolAnswer>; usage: DecisionToolUsage; latencyMs: number; truncated: boolean }
+  | { ok: false; error: DecisionToolError };
+
+/**
+ * Decision-layer callback, injected by the backend (SessionManager). Network,
+ * validation, gating and recording all live behind it.
+ */
+export interface DecisionToolCallbacks {
+  decide(request: DecisionToolRequest): Promise<DecisionToolResult>;
+}
+
 export interface SessionInfo {
   id: string;
   name: string;
@@ -712,13 +790,20 @@ export interface SendAgentMessageResult {
 export interface BackgroundTaskInfo {
   taskId: string;
   intent?: string;
+  /** What the session's agent launched: a background agent, a Workflow, a Bash command, or another task. */
+  kind?: 'agent' | 'workflow' | 'shell' | 'task';
   status: 'running' | 'completed' | 'failed' | 'stopped' | 'orphaned';
-  /** ms timestamp when the task was backgrounded */
-  startTime: number;
-  /** seconds elapsed since start (derived at query time) */
-  elapsedSeconds: number;
+  /** ms timestamp when the task was backgrounded (absent for untracked tasks) */
+  startTime?: number;
+  /** seconds elapsed since start, derived at query time (absent for untracked tasks) */
+  elapsedSeconds?: number;
   /** ms timestamp when the task reached a terminal/orphaned status, if any */
   completedAt?: number;
+  /**
+   * A completion seen for a task this session's agent did not launch (typically a subagent's
+   * own background task); its start time is unknown.
+   */
+  untracked?: boolean;
 }
 
 // ============================================================

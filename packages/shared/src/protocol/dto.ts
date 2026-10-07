@@ -58,7 +58,7 @@ export interface Session {
   messages: Message[]
   isProcessing: boolean
   isFlagged?: boolean
-  /** Permission mode for this session ('safe', 'ask', 'allow-all') */
+  /** Permission mode for this session ('safe', 'ask', 'guarded', 'allow-all') */
   permissionMode?: PermissionMode
   sessionStatus?: SessionStatus
   /** Labels (additive tags, many-per-session — bare IDs or "id::value" entries) */
@@ -150,6 +150,8 @@ export interface CreateSessionOptions {
   llmConnection?: string
   systemPromptPreset?: 'default' | 'mini' | string
   hidden?: boolean
+  /** Nobody answers prompts in this session (CLI runs): features that would add a prompt skip it. */
+  unattended?: boolean
   sessionStatus?: SessionStatus
   labels?: string[]
   isFlagged?: boolean
@@ -343,6 +345,20 @@ export interface TaskResultNodeDto {
   output?: string
 }
 
+/** One verifier verdict as shown in the Results view. */
+export interface TaskVerdictDto {
+  result: 'pass' | 'fail' | 'unparsed'
+  reason?: string
+  nodes?: string[]
+  /**
+   * `decision` when the verdict was read out of a reply without a VERDICT line by the decision
+   * model (opt-in layer); absent for a parsed VERDICT line. The UI marks inferred verdicts.
+   */
+  via?: 'parsed' | 'decision'
+  /** Decision-model verdicts only: confidence of the winning option (0..1). */
+  confidence?: number
+}
+
 /**
  * Storage-backed read of a task run's outcome — verdict + per-node final output, recovered from
  * the persisted run artifacts (run-log.jsonl, nodes/<id>.json, per-run spec.json snapshot). Unlike
@@ -355,9 +371,9 @@ export interface TaskResultsDto {
   /** All run ids for this task (newest last), for a run picker. */
   runIds: string[]
   /** The most recent verdict (kept for back-compat with single-verdict consumers). */
-  verdict?: { result: 'pass' | 'fail' | 'unparsed'; reason?: string; nodes?: string[] }
+  verdict?: TaskVerdictDto
   /** Every verdict in order (a FAIL→repair loop produces several), for the Results history view. */
-  verdicts?: { result: 'pass' | 'fail' | 'unparsed'; reason?: string; nodes?: string[] }[]
+  verdicts?: TaskVerdictDto[]
   /** Repair-loop accounting: attempts consumed (= count of FAIL verdicts) and the resolved cap. */
   repair?: { used: number; max: number }
   /** Terminal run status recovered from the run-log (completed | failed | stopped | …). */
@@ -407,10 +423,10 @@ export type SessionEvent =
   | { type: 'labels_changed'; sessionId: string; labels: string[] }
   | { type: 'project_id_changed'; sessionId: string; projectId: string | null }
   | { type: 'connection_changed'; sessionId: string; connectionSlug: string; supportsBranching?: boolean }
-  | { type: 'task_backgrounded'; sessionId: string; toolUseId: string; taskId: string; intent?: string; turnId?: string; kind?: 'workflow'; workflowId?: string }
+  | { type: 'task_backgrounded'; sessionId: string; toolUseId: string; taskId: string; intent?: string; turnId?: string; kind?: 'workflow' | 'task'; workflowId?: string }
   | { type: 'shell_backgrounded'; sessionId: string; toolUseId: string; shellId: string; intent?: string; command?: string; turnId?: string }
   | { type: 'task_progress'; sessionId: string; toolUseId: string; elapsedSeconds: number; turnId?: string }
-  | { type: 'task_completed'; sessionId: string; taskId: string; status: 'completed' | 'failed' | 'stopped'; outputFile?: string; summary?: string; turnId?: string }
+  | { type: 'task_completed'; sessionId: string; taskId: string; status: 'completed' | 'failed' | 'stopped'; outputFile?: string; summary?: string; turnId?: string; toolUseId?: string; launchedHere?: boolean }
   | { type: 'workflow_agent_completed'; sessionId: string; workflowId: string; agentId: string; turnId?: string }
   | { type: 'shell_killed'; sessionId: string; shellId: string }
   | { type: 'user_message'; sessionId: string; message: Message; status: 'accepted' | 'queued' | 'processing'; optimisticMessageId?: string }
@@ -618,6 +634,11 @@ export interface LlmConnectionSetup {
 export interface TestLlmConnectionParams {
   provider: 'anthropic' | 'pi'
   apiKey: string
+  /**
+   * Slug of the connection being edited. Lets the server resolve the masked
+   * GET_API_KEY placeholder back to the stored credential for the test.
+   */
+  connectionSlug?: string
   baseUrl?: string
   model?: string
   piAuthProvider?: string
