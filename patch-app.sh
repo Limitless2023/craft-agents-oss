@@ -68,9 +68,20 @@ fi
 # UI 列出子进程认不出的模型 → 子进程 fallback 到无 key 的 provider →
 # "No API key found for <provider>" → 设置页误报 "Provider mismatch during setup"。
 # 升级 Pi SDK 后必须 `bun run server:build:subprocess` 再 patch，否则子进程落后。
+#
+# 判据补充（2026-10-07，v0.14.1）：不只看 Pi SDK 版本与模型目录，**还要看
+# pi-agent-server 自身源码有没有变**——v0.14.1 两个 SDK 版本号都没动，但子进程
+# 自己改了 10 个文件 / +470 行，不重建就是陈旧的。
+#
+# 只剩 pi-agent-server 一个（2026-10-07，v0.14.1）：上游把 session-mcp-server 与
+# bridge-mcp-server 两个 bundle 一并退役——从 electron-builder.yml 的 files 清单删掉、
+# 从 apps/electron/resources/ 删掉，`server:build:subprocess` 也只构建 pi-agent-server
+# 了。会话工具（create_task / archive_session 等）改走 in-process 的 session-tools-core，
+# 不再起 MCP 子进程。装机版里那两个旧目录是首次安装留下的，已无人调用；继续同步只会
+# 把仓库里 9 月那份陈旧 bundle 推进去，纯属误导。
 # ===========================================================================
 echo "Syncing subprocess server bundles..."
-for SERVER in pi-agent-server session-mcp-server bridge-mcp-server; do
+for SERVER in pi-agent-server; do
   SRC="$REPO_ROOT/packages/$SERVER/dist/index.js"
   DEST="$APP_RESOURCES/$SERVER/index.js"
   if [ -f "$SRC" ] && [ -d "$APP_RESOURCES/$SERVER" ]; then
