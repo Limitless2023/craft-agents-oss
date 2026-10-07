@@ -374,6 +374,26 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-10-07: local main merged up to upstream **v0.14.1**（一次吃下 v0.13.6 / v0.14.0 / v0.14.1 三版）— 0 behind, 176 custom ahead. Merge commit `86788da3`, checkpoint 分支 `backup/main-pre-v0.14.1` @ 3edb9dc9。**近期最大的一次合并**：307 文件 / +18906 −19973。
+>
+> **v0.14.0 是功能大版本——「决策模型」(opt-in)**：Settings → AI 多了一张卡，接一个小而快的模型专门回答**带类型的问题**（选一个 / 打分 / 是或否），约 0.25 秒给出概率而不写文字；可用 Jev（TypeSafe / OpenRouter / Vercel AI Gateway，自带 key）或本机跑 **Laya**（`laya-serve`，免费）。**默认关，开之前什么都不外发**，每次调用只在 `~/.craft-agent/logs/decisions.jsonl` 记输入的哈希、不记输入本身。它带出一串子功能（各有独立开关）：**Guarded 权限模式**（介于 Ask to Edit 与 Execute 之间：Bash / MCP 写 / 非 GET 的 API 调用先过检查，难撤销、出项目、会碰到别人的操作才问你；检查跑不动就退化成 Ask to Edit，Execute 完全不碰决策模型）、agent 的 `decide` 工具（一次分类/打分最多 200 项）、自适应思考档位、中途消息判定（纠正 → steer / 另起 → 排队）、智能标题、风险徽标、大结果裁剪。v0.14.1 继续打磨（大结果改为"挑出 agent 要的那几段"，7–8 秒 → 约 0.5 秒）。
+>
+> **v0.13.6 是一堆实打实的修复**，其中几条值得知道：transcript 里不再出现 `./Users/…` 这类**多余点号的路径**（#1056，根因是相对化基准取了进程目录，从 Finder 启动时那是 `/`）；`CRAFT_CONFIG_DIR` 现在真的能移走全部数据（此前 20 处仍硬写 `~/.craft-agent`，第二个实例会和默认实例共用凭据）；Pi `/compact` 期间发出的消息不再凭空消失；**内置浏览器关掉弹窗后能恢复**（这条直接让我们的测试基线从 8 fail 降到 6）。
+>
+> **冲突只有 10 处、且全是加法**：`AppShell.tsx`（我们的 `SessionSwitcher` ⌘\ vs 上游 `RtkUpdatePrompt`，并存）、`claude-agent.ts`（import 行：上游加 `SdkAutomationInput` 类型 vs 我们的 `loadCliHooks`，并存）、7× i18n（我们的 `promptRail.*` 撞上上游的 `rtkUpdate.*`，按字典序并集，7 份都是 1989 键）。`bun.lock` 这次**自动合上了**，历次第一回。
+>
+> ⚠️ **两个 SDK 版本号都没变，但子进程必须重建**：Agent SDK 仍 0.3.280、Pi SDK 仍 0.87.1、`config/models{,-pi}.ts` 也没变——按旧判据会判成"不用重建"，**但 `pi-agent-server` 自身源码改了 10 文件 / +470 −92**。**判据补充：除了 Pi SDK 版本与模型目录，还要看 `packages/pi-agent-server/` 自身有没有改动。** jiti 坑本次未触发（Pi SDK 未动）。
+>
+> ⚠️ **上游退役了两个 MCP server bundle**（release note 说的 "Leaner app bundle"）：`session-mcp-server` 与 `bridge-mcp-server` 从 `electron-builder.yml` 的 files 清单和 `apps/electron/resources/` 双双删除，`server:build:subprocess` 现在**只构建 `pi-agent-server`**；会话工具（create_task / archive_session 等）改走 in-process 的 `session-tools-core`，不再起 MCP 子进程。`patch-app.sh` 的同步循环已跟着收到一个——装机版里那两个旧目录是首次安装留下的、已无人调用，继续同步只会把仓库里 9 月那份陈旧 bundle 推进去。
+>
+> **✅ 两条长期遗留债被上游修掉了**：`typecheck:all` 末尾那条必然失败的 `cd ../../workers/pages` 现在是 `typecheck:pages-worker`，带 `if [ -d workers/pages ]` 守护——**`typecheck:all` 终于能整条跑通**（本次实测通过）。逐包跑仍然有效，但不再是唯一可信口径。
+>
+> **我们自己的两处"测试与实现脱节"已修**：① ipc-channels 快照漏了上游新增的 `decisions:getUsage`（366 vs 367）；② `cli-hooks.test.ts` 引用已移除的 `replaceSource` 导致**整个文件加载失败**（SyntaxError + 1 unhandled error）——已用 worktree 在合并前的树上复跑确认是**我方既有债、非本次合并引入**，而那个函数是按明确要求移除的（第三方 bridge 二进制只认预定义 source 名，改写成 `craft-agents` 会被拒绝退出），所以删掉那 3 个用例并就地留注释锁住结论。
+>
+> **测试基线更新**：electron/src **1062** pass / **6 fail**（全部 BrowserPaneManager，上游修掉了其中 2 个）；ui 340 全绿；shared **3602** pass / **14 fail** / **0 error**（12 基线 + PromptBuilder volatile/stable + GitHub OAuth 发现超时；pass 数 +1184 为上游决策模型的新用例）；server-core **407** 全绿（+149）。
+>
+> 📌 顺带发现一处文档缺口：`SessionSwitcher`（⌘\ 模糊跳转会话）+ tab 重排 + 置顶会话是提交 `7432cc54` 引入的定制，但**没有登记进上面的 Custom Modifications 清单**。不是本次引入，先记在这里。
+>
 > Baseline as of 2026-09-25: local main merged up to upstream **v0.13.5**（2026-09-24 发版）— 0 behind, 171 custom ahead. Merge commit `dc7dcc64`, checkpoint 分支 `backup/main-pre-v0.13.5` @ 9ebaefd5。**这版的主角是 Claude Opus 5.5**（`claude-opus-5-5`）——进注册表并成为**新的默认模型**（此前默认 Opus 4.8）。双 SDK 同时升：**Agent SDK 0.3.258→0.3.280**、**Pi SDK 0.85.1→0.87.1**，⚠️ **必须 `server:build:subprocess`**（重建后子进程 bundle 命中 17 处 `claude-opus-5-5`，main.cjs 18 处）。**jiti 坑第四次复现**（0.87.1 仍精确依赖嵌套 jiti 2.7.0），照例 `bun install --force` 后通过。
 >
 > **合并**：仅 `bun.lock` 冲突，`claude-agent.ts` 自动合并干净。8 个包 typecheck 全 0 错。
@@ -426,7 +446,7 @@ git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新�
 >
 > **合并**：上游 53 文件 / +1855 −241，与定制交集 3 个（`apps/electron/package.json`、`AiSettingsPage.tsx`、`bun.lock`），**仅 `bun.lock` 真冲突**。⚠️ **模型目录（`config/models-pi.ts`）+ Pi SDK 双双变化 → 必须 `server:build:subprocess`**，判据见 v0.11.4 那条。**jiti 坑如期复现**：0.81.1 仍精确依赖嵌套 jiti，首次构建报 `Could not resolve "jiti/static"`，`bun install --force` 补齐后即通过（重建后子进程 bundle 里 kimi 命中 92 处）。测试基线：electron/src 972 pass / 8 fail（browser-pane-manager）；ui 340 全绿；shared **2201** pass / 13 fail（通过数 +24 为上游新增 Kimi 用例）；server-core 220 全绿。
 >
-> 记一条无需惊慌的常态：`patch-app.sh` 里 `bridge-mcp-server: skipped` 是**预期行为**——`server:build:subprocess` 只构建 `pi-agent-server` + `session-mcp-server` 两个，bridge 在仓库里没有 `dist`，装机版沿用官方原版即可。
+> 记一条无需惊慌的常态：`patch-app.sh` 里 `bridge-mcp-server: skipped` 是**预期行为**——`server:build:subprocess` 只构建 `pi-agent-server` + `session-mcp-server` 两个，bridge 在仓库里没有 `dist`，装机版沿用官方原版即可。（**此条自 v0.14.1 起作废**：上游把 bridge 与 session 两个 bundle 一起退役，`patch-app.sh` 不再同步它们，所以这行输出也不会再出现。）
 >
 > Baseline as of 2026-08-19: local main merged up to upstream **v0.12.0** (2026-08-18) — 0 behind, 158 custom ahead. Merge commit `568e38b8`, checkpoint 分支 `backup/main-pre-v0.12.0` @ 75a0e84d。**这版基本是一次搬家而非功能版本**：域名迁到 `thecraftagents.com`（应用/下载/自动更新源/分享链接/文档全部换址），文档站从内置 Mintlify 改为纯静态站。唯一实质变化对我们有利——**agent 不再挂载内置 `craft-agents-docs` MCP 服务器**（改为引用公开文档站），每个会话少一条常驻后台连接，`<sources>` 注入块也随之变短。
 >
@@ -477,10 +497,11 @@ bun run --filter '@craft-agent/electron' build:preload
 bun run --filter '@craft-agent/electron' build:preload-toolbar
 bun run --filter '@craft-agent/electron' build:copy   # 刷新 dist/resources（docs/发版说明/权限/主题）
 
-# 2b. If the Pi SDK was upgraded (new models in the catalog), REBUILD the
-#     subprocess bundle too — main.cjs and pi-agent-server carry separate SDK
-#     copies and must stay in lockstep (see "Pi SDK version skew" below).
-bun run server:build:subprocess   # rebuilds packages/{pi-agent-server,session-mcp-server}/dist/index.js
+# 2b. REBUILD the subprocess bundle when the Pi SDK, the model catalog
+#     (config/models{,-pi}.ts) OR packages/pi-agent-server/ itself changed —
+#     main.cjs and pi-agent-server carry separate SDK copies and must stay in
+#     lockstep (see "Pi SDK version skew" below). 自 v0.14.1 起只建一个包。
+bun run server:build:subprocess   # rebuilds packages/pi-agent-server/dist/index.js
 
 # 3. Quit Craft Agents (Cmd+Q), then run the patch script
 #    (patch-app.sh now also syncs resources/<server>/index.js)
@@ -494,7 +515,7 @@ bash patch-app.sh
 2. Removes old `main-*.js`, `playground-*.js`, `sonner-*.js` and copies our builds
 3. Copies `index.html` directly from build output (avoids fragile hash detection)
 4. Syncs `@anthropic-ai/claude-agent-sdk` + native binary package
-5. **Syncs subprocess server bundles** (`pi-agent-server`, `session-mcp-server`, `bridge-mcp-server`) from `packages/<server>/dist/index.js` → `resources/<server>/index.js`
+5. **Syncs the subprocess server bundle** (`pi-agent-server`) from `packages/pi-agent-server/dist/index.js` → `resources/pi-agent-server/index.js`。自上游 v0.14.1 起 `session-mcp-server` / `bridge-mcp-server` 已退役，不再同步
 6. **Syncs bundled resources** (`docs`, `release-notes`, `permissions`, `themes`, `tool-icons`) from `apps/electron/dist/resources/` → 装机版 `dist/resources/`，排除三个 server 目录（它们由上一步单独同步，一并覆盖会把刚建好的 bundle 换成 `build:copy` 拷来的旧文件）
 6. Adds `.md` file association to `Info.plist` (with UTI declarations)
 7. Re-signs the app (ad-hoc) and re-registers with Launch Services
