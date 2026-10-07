@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { writeFileSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { loadCliHooks, replaceSource } from './cli-hooks'
+import { loadCliHooks } from './cli-hooks'
 
 describe('cli-hooks', () => {
   let tempDir: string
@@ -16,22 +16,9 @@ describe('cli-hooks', () => {
     rmSync(tempDir, { recursive: true, force: true })
   })
 
-  describe('replaceSource', () => {
-    it('should replace --source=claude with --source=craft-agents', () => {
-      expect(replaceSource('/path/to/bridge --source=claude'))
-        .toBe('/path/to/bridge --source=craft-agents')
-    })
-
-    it('should replace --source claude with --source craft-agents', () => {
-      expect(replaceSource('/path/to/bridge --source claude'))
-        .toBe('/path/to/bridge --source craft-agents')
-    })
-
-    it('should leave commands without --source unchanged', () => {
-      expect(replaceSource('/path/to/script.sh'))
-        .toBe('/path/to/script.sh')
-    })
-  })
+  // 刻意没有 replaceSource 的用例：第三方 bridge 二进制（Vibe Island 等）只接受
+  // 预定义的 source 名，改写成 craft-agents 会被直接拒绝退出。命令按用户配置原样
+  // 透传，source 身份由用户的 settings 决定——该函数因此被移除，不是忘了测。
 
   describe('loadCliHooks', () => {
     it('should return empty object when settings file does not exist', () => {

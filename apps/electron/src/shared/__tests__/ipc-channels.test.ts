@@ -79,6 +79,7 @@ const EXPECTED_CHANNELS: string[] = [
   'decisions:deleteApiKey',
   'decisions:getSettings',
   'decisions:getStatus',
+  'decisions:getUsage',
   'decisions:probeServer',
   'decisions:setApiKey',
   'decisions:setSettings',
