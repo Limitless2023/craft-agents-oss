@@ -121,6 +121,17 @@ export function isVizFilePath(filePath: string): boolean {
 }
 
 /**
+ * 能交给系统默认浏览器打开的文件。只认 .html / .htm——其余类型交给默认程序
+ * 没有"在浏览器中打开"的语义（.md 会进编辑器、.py 会进 IDE）。
+ *
+ * 刻意**不排除** `.craft/visualizations/` 下的 viz 产物：那些页面在浏览器里照样
+ * 能看（技能要求组件在没有宿主桥的情况下仍可用），只是追问回传会回执 unsupported。
+ */
+export function isBrowserOpenableFilePath(filePath: string): boolean {
+  return /\.html?$/i.test(filePath.trim())
+}
+
+/**
  * Classify a file path by extension to determine preview capability.
  *
  * Priority order when an extension matches multiple sets (e.g. svg):

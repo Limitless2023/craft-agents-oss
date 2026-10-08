@@ -329,6 +329,23 @@ Preview 面板不再是 `.md` 专属：**代码/文本/JSON 文件点开后默�
 
 **Patching:** ⚠ 非 renderer-only（SessionManager + claude-agent 进 main.cjs，preload 也变）→ `build:renderer` + `build:main` + `build:preload` + `bash patch-app.sh`。`claude-agent.ts` 不进 subprocess bundle（那是 Pi 路径），无需 `server:build:subprocess`。
 
+### Open HTML in Browser — 对话里的 .html 链接右键外部打开
+
+消息正文里的 `.html` / `.htm` 链接**右键** → 「在浏览器中打开」，交给系统默认关联程序（绝大多数机器上就是默认浏览器）。左键行为完全不变（仍进代码查看器）。其余链接——网址、`.md`、`.py` 等——**不拦截右键**，保留原生菜单。
+
+**三个让它变简单的发现**（都是先读代码才看出来的）：
+
+1. **不用穿 prop 链**。`onOpenFileExternal` 住在 `packages/ui` 自己的 `PlatformContext` 里（App.tsx 经 `PlatformProvider` 注入，PDF 外部打开走的就是它），markdown 组件 `usePlatform()` 直接拿。**因此本功能零新增回调参数**，自然绕开了「往 `createComponents` 加回调会让 fence 整树重挂闪烁」那条历史教训——那条教训仍然成立，只是这次根本不必踩。
+2. **菜单原语也在 packages/ui**。app 里的 `ui/styled-dropdown.tsx` 只是从 `@craft-agent/ui` 再导出，所以 `DropdownMenu` / `StyledDropdownMenuContent` / `StyledDropdownMenuItem` 在包内直接可用，不必跨包。
+3. **⚠️ 绝不能走 `shell.openExternal('file://…')`**：`file:` 在 `packages/shared/src/utils/url-safety.ts` 的 `DANGEROUS_SCHEMES` 里**被刻意拉黑**，注释写明理由（Electron 在 Windows 上可借此启动本地可执行文件，RCE 类）。正确的路是已有的 `shell.OPEN_FILE`（`shell.openPath`），与 PDF 同一条——`openPath` 按文件类型交给默认程序，不是 `openExternal` 那个攻击面。
+
+**实现细节**：锚点从 `Markdown.tsx` 的内联 `a` 渲染器**抽成独立组件** `MarkdownFileLink.tsx`——它需要自己的菜单状态，而内联箭头组件里挂 hook 会随组件表 memo 重建丢状态。Radix 下拉锚定在 Trigger 上而右键菜单要开在光标处，故放一个 `position: fixed` 的 0×0 `<span>` 当锚点，菜单关闭即卸载。判定函数 `isBrowserOpenableFilePath` 放进 `file-classification.ts`（+6 例测试，含「`.html.bak` / `.htmlx` 不算」「路径中段的 `/html/` 不算」这类边界）。viz 产物（`.craft/visualizations/*.html`）**刻意不排除**——浏览器里照样能看，只是追问回传会回执 unsupported。
+
+**New files:** `packages/ui/src/components/markdown/MarkdownFileLink.tsx`、`packages/ui/src/lib/__tests__/file-classification.test.ts`
+**Modified files:** `packages/ui/src/components/markdown/Markdown.tsx`（`a` 渲染器委托 + 清掉已无用的 `resolveMarkdownLinkTarget` import）、`packages/ui/src/lib/file-classification.ts`、7× i18n（`common.openInBrowser` 1 键）。
+
+**Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
+
 ### Needs-You Attention Signal — 待你处理的会话，余光可感知
 
 「需要你动手」的状态（待批权限 / 待批计划）从**静态小图标**升级为**会呼吸的图标 + 常驻聚合徽标**。灵感来自 Grok Bot 那个[代码写成的形变图标](https://benji.org/morphing-icons-with-claude)，但**没有照抄形变**——调研后发现真正可迁移的不是动画本身，而是"运动携带信息"这一点。

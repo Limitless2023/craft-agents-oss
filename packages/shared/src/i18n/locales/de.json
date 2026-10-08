@@ -356,6 +356,7 @@
   "common.never": "Nie",
   "common.ok": "OK",
   "common.open": "Öffnen",
+  "common.openInBrowser": "Im Browser öffnen",
   "common.openLink": "Link öffnen",
   "common.pending": "Ausstehend",
   "common.reconfigure": "Neu konfigurieren",

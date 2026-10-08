@@ -356,6 +356,7 @@
   "common.never": "なし",
   "common.ok": "OK",
   "common.open": "開く",
+  "common.openInBrowser": "ブラウザで開く",
   "common.openLink": "リンクを開く",
   "common.pending": "待機中",
   "common.reconfigure": "再設定",

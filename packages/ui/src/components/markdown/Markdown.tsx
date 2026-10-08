@@ -19,7 +19,7 @@ import { MarkdownLatexBlock } from './MarkdownLatexBlock'
 import { MarkdownPdfBlock } from './MarkdownPdfBlock'
 import { MarkdownDocBlock } from './MarkdownDocBlock'
 import { preprocessLinks } from './linkify'
-import { resolveMarkdownLinkTarget } from './link-target'
+import { MarkdownFileLink } from './MarkdownFileLink'
 import remarkCollapsibleSections from './remarkCollapsibleSections'
 import { CollapsibleSection } from './CollapsibleSection'
 import { useCollapsibleMarkdown } from './CollapsibleMarkdownContext'
@@ -212,41 +212,23 @@ function createComponents(
     // - The click handler still receives the ORIGINAL `href` and routes it
     //   through `resolveMarkdownLinkTarget` so file URLs land in `onFileClick`
     //   and blocked URLs surface a meaningful error via `onUrlClick` →
-    //   `classifyExternalUrl`.
+    //   `classifyExternalUrl`. That dispatch now lives in MarkdownFileLink;
+    //   `rawHref` is the original, `safeHref` the sanitized one.
+    // 锚点本体委托给 MarkdownFileLink：它需要自己的菜单状态（.html 链接的右键
+    // 「在浏览器中打开」），而内联箭头组件里挂 hook 会随组件表 memo 重建丢状态。
+    // 打开能力它自己从 PlatformContext 取，**不经这里传回调**——见该文件头部。
     a: ({ href, children }) => {
       const trimmedHref = href?.trim() ?? ''
       const sanitized = trimmedHref ? defaultUrlTransform(trimmedHref) : ''
-      const safeHref = sanitized ? sanitized : undefined
-
-      const handleClick = (e: React.MouseEvent) => {
-        e.preventDefault()
-
-        // Some AI outputs include raw HTML anchors with empty href but path text content.
-        // Fallback to the anchor text when href is missing/empty.
-        const fallbackText = React.Children.toArray(children)
-          .map((child) => (typeof child === 'string' ? child : ''))
-          .join('')
-          .trim()
-
-        const target = trimmedHref || fallbackText
-        if (!target) return
-
-        const resolvedTarget = resolveMarkdownLinkTarget(target)
-        if (resolvedTarget.kind === 'file' && onFileClick) {
-          onFileClick(resolvedTarget.path)
-        } else if (resolvedTarget.kind === 'url' && onUrlClick) {
-          onUrlClick(resolvedTarget.url)
-        }
-      }
-
       return (
-        <a
-          href={safeHref}
-          onClick={handleClick}
-          className="text-accent hover:underline cursor-pointer"
+        <MarkdownFileLink
+          rawHref={trimmedHref}
+          safeHref={sanitized ? sanitized : undefined}
+          onFileClick={onFileClick}
+          onUrlClick={onUrlClick}
         >
           {children}
-        </a>
+        </MarkdownFileLink>
       )
     },
   }
