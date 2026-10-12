@@ -2945,6 +2945,62 @@ function AppShellContent({
           animateLayout={animateShellLayout}
         />
 
+        {/* Right Sidebar — Preview / Docs / Files / History（我方定制）。
+            ⚠️ v0.15.0 合并时这整块曾被误取上游侧而丢失，导致 Preview 看板打不开：
+            上游在同一位置把接缝手柄抽成了 ShellResizeHandle，冲突块看起来像"纯手柄
+            重构"，实则我们这侧还裹着右侧栏本体。 */}
+        {isRightSidebarOpen && rightSidebarPanel && (
+          <div
+            className="h-full shrink-0 relative"
+            style={{ width: displayedRightSidebarWidth }}
+          >
+            {/* 视觉层：圆角裁剪独立成层——手柄必须留在 overflow-hidden 之外，
+                负 margin 伸进面板缝隙的那一半命中区才不会被裁掉（裁掉正是
+                "拖动条难触发"的根源：用户瞄准的可视缝隙恰好是死区）。
+                表面随 v0.15.0 收敛到 shell-card + bg-paper + shadow-elev-1，与 PanelSlot 同材质。 */}
+            <div
+              className="shell-card absolute inset-0 overflow-hidden bg-paper shadow-elev-1"
+              style={{ borderRadius: RADIUS_INNER }}
+            >
+              <RightSidebar
+                panel={rightSidebarPanel}
+                closeButton={
+                  <button
+                    onClick={() => updateRightSidebar({ type: 'none' })}
+                    className="rounded-[6px] p-1 text-tertiary transition-colors hover:text-foreground"
+                    title={t('common.close')}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                }
+              />
+            </div>
+            {/* Right Sidebar Resize Handle（相对本容器定位，故不走 ShellResizeHandle
+                ——后者按 shell 绝对坐标算 left） */}
+            <div
+              ref={rightSidebarHandleRef}
+              onMouseDown={(e) => { e.preventDefault(); setIsResizing('right-sidebar') }}
+              onMouseMove={(e) => {
+                if (rightSidebarHandleRef.current) {
+                  const rect = rightSidebarHandleRef.current.getBoundingClientRect()
+                  setRightSidebarHandleY(e.clientY - rect.top)
+                }
+              }}
+              onMouseLeave={() => { if (isResizing !== 'right-sidebar') setRightSidebarHandleY(null) }}
+              className="absolute left-0 top-0 bottom-0 z-10 flex cursor-col-resize justify-center"
+              style={{ width: PANEL_SASH_HIT_WIDTH, marginLeft: -PANEL_SASH_HALF_HIT_WIDTH }}
+            >
+              <div
+                className="h-full"
+                style={{
+                  ...getResizeGradientStyle(rightSidebarHandleY, rightSidebarHandleRef.current?.clientHeight ?? null),
+                  width: PANEL_SASH_LINE_WIDTH,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Seam handles (absolute, hidden in focused mode) — instant, never animated */}
         {!effectiveSidebarAndNavigatorHidden && (
           <ShellResizeHandle
