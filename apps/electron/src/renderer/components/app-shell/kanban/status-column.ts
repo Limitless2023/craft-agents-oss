@@ -42,6 +42,12 @@ export function statusToColumn(statusId: string): KanbanColumnId {
  * KanbanBoard（渲染）与 KanbanBoardContainer（批量选择的 Shift 区间序）共用此函数，
  * 保证"视觉顺序"与"选择顺序"永远同构——分开各写一份迟早漂移。
  */
+/**
+ * 任务的"新近度"排序键。**唯一定义处**——看板的渲染序、拖拽落点指示器与批量选择的
+ * 区间序都用它；分两处定义必然漂移，而"渲染序 == 选择序"是批量选择的前提。
+ */
+export const taskRecency = (t: KanbanTask) => t.createdAt ?? t.lastMessageAt ?? 0
+
 export function bucketTasksByColumn(
   tasks: readonly KanbanTask[],
   columns: readonly KanbanColumnMeta[]
@@ -55,7 +61,6 @@ export function bucketTasksByColumn(
     if (target === undefined) continue
     buckets.get(target)!.push(task)
   }
-  const recency = (t: KanbanTask) => t.createdAt ?? t.lastMessageAt ?? 0
-  for (const list of buckets.values()) list.sort((a, b) => recency(b) - recency(a))
+  for (const list of buckets.values()) list.sort((a, b) => taskRecency(b) - taskRecency(a))
   return buckets
 }

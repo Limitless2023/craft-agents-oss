@@ -97,7 +97,8 @@ export function MarkdownFileLink({
       href={safeHref}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className="text-accent hover:underline cursor-pointer"
+      // 样式取自上游 v0.15.0 重做后的锚点——定制搬进新设计语言，不留旧写法
+      className="cursor-pointer text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-current"
     >
       {children}
     </a>

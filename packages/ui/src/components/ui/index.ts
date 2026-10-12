@@ -4,6 +4,7 @@
 
 export { Spinner, type SpinnerProps, LoadingIndicator, type LoadingIndicatorProps } from './LoadingIndicator'
 export { AgentSpinner, type AgentSpinnerProps, type GlimmerMode } from './AgentSpinner'
+export { AnimatedCollapsibleContent } from './AnimatedCollapsibleContent'
 export {
   SimpleDropdown,
   SimpleDropdownItem,

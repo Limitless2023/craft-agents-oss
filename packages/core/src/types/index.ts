@@ -85,6 +85,7 @@ export type {
   PageActionRequest,
   PageActionResult,
   PageShareInfo,
+  PageClaudeArtifactInfo,
   PageThumbnailInfo,
   PageConfig,
 } from './page.ts';
