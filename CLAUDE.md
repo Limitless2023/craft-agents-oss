@@ -222,7 +222,11 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **Patching:** renderer-only → `build:renderer` + `bash patch-app.sh`.
 
-### Expand Long Responses — 长回复完全展开（设置开关）
+### ~~Expand Long Responses — 长回复完全展开（设置开关）~~ · 已退役 (v0.15.0)
+
+> **上游追平后主动删除**：v0.15.0 的新回复正文是 transcript 上的纯文本，注释写明 "no card, no inner scroll cap"，`MAX_HEIGHT = 540` 与暗色渐隐遮罩一起消失——我们这个开关做的事已成默认行为。`atoms/chat-response-height.ts`、Appearance 开关、2 键 ×7 i18n 均已清除。下面保留原记录备查。
+
+### Expand Long Responses — 原记录
 
 上游的助手回复卡片写死 `MAX_HEIGHT = 540`（`TurnCard.tsx`），超出即在卡片内自成滚动区——大屏（外接显示器）上垂直空间充裕时反而割裂阅读（表格表头被卡在卡片外）。新增 **Settings → Appearance →「展开长回复」** 开关：开启后回复不限高、不内滚，由页面主滚动条承载；**默认关 = 保持上游行为**（窄屏/多面板下卡片限高仍有价值）。展开时**一并取消暗色模式的首尾渐隐遮罩**（无溢出还渐隐只会让首尾文字平白变淡）。
 
@@ -391,6 +395,50 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-10-12: local main merged up to upstream **v0.15.0**（2026-10-11 发版）— 0 behind, 183 custom ahead. Merge commit `a8c9b905`, checkpoint 分支 `backup/main-pre-v0.15.0` @ 93dcc86f。**迄今最大的一次合并**：499 文件 / +24835 −15370，**28 个文件冲突、56 个冲突块**。
+>
+> **⭐ 一条修复值得单独说**：**自 0.14.1 起所有 MCP / API 数据源调用全是坏的**（Slack / Linear / Notion / Gmail 报 `_intent expected string, received undefined`，#1086）。我们在 0.14.1 上待了 5 天，期间数据源一直不可用。
+>
+> **内容**：⭐ **全应用统一设计语言**（下详）+ **Claude Sonnet 5.5 / Haiku 5.5**（1M 上下文，Anthropic + Bedrock；Haiku 5.5 接管标题摘要，约为 Haiku 4.5 的 **1/10 成本**）+ GPT-6.1 Sol + Cloudflare AI Gateway 预设 + Page 一键发布为 Claude artifact + 后台任务可跟进/可单独停止 + shell 代码块 Run 按钮。**Agent SDK 0.3.280→0.3.296、Pi SDK 0.87.1→1.1.0（跨大版本）**，模型目录与 `pi-agent-server` 自身（17 文件）均变 → 必须 `server:build:subprocess`；**jiti 坑第五次复现**，`bun install --force` 后通过。
+>
+> ### 新设计语言是什么（`packages/ui/src/styles/tokens.css`，全新 491 行）
+>
+> 核心是**五层表面**，每层写明用途：`--surface-navigator`（画布：顶栏/侧栏/窗口底）→ `--surface-paper`（内容：列表+对话卡、详情页）→ `--surface-raised`（纸上的卡：输入框、设置分组）→ `--surface-sunken`（**井**：代码块、工具输出、输入框内部）→ `--surface-floating`（菜单/浮层/toast/对话框）。四个语义角色 `accent / info / success / destructive` 各拆 `-raw / -text / -solid / on-*`，注释直接写死对比度目标（`--text` ≥4.5:1、`--text-secondary` 7:1、`--border-control` ≥3:1、`--focus-ring` ≥3:1）。另有完整状态层 `fill-hover/pressed/selected/bubble` 与 `border-subtle/border/strong`，全部 `color-mix` 在前景色上算出，换主题自动跟随。**品牌紫基本没动**（hue 293→292），变的是明度/饱和度（浅色 L .58→.52、C .22→.19；深色 L .65→.70、C .20→.15）——同一个紫被按每个主题重新配平，不会像换了产品。
+>
+> ### ⚠️ 这次冲突的性质与以往不同：是「搬家」不是「并集」
+>
+> 上游把我们定制所在的巨型文件**拆开了**：`TurnCard.tsx` **3287 → 1888 行**（抽出 `chat/turn/` 12 个文件）、`AppShell.tsx` −1412（抽出 `SidebarPane`/`ShellResizeHandle`/`chat-header/`）、`ChatDisplay.tsx` −588（抽出 `chat-display/`）、`ChatPage.tsx` 整个头部搬进 `chat-header/ChatHeader.tsx`。所以大多数冲突不能取并集，而要**找到定制挂靠的那段代码搬去了哪，再搬过去**。逐项落位：
+>
+> | 定制 | 新家 |
+> |---|---|
+> | 收藏 heart | `chat/turn/ResponseFooter.tsx` |
+> | 工具输出预览 ⎿ | `chat/turn/ActivityRow.tsx`（RowShell 是严格单行 → 包进 fragment 挂在行下方） |
+> | 运行时展开 + 实时计时 | TurnCard 状态机原样装回；`RunningElapsed` 搬进 `chat/turn/WorkLog.tsx` |
+> | viz 追问 | 直接传 `<Markdown onVizFollowUp>`（Markdown 内部已 ref 化，**不要**进任何 components memo 依赖） |
+> | 跳转高亮环 | `chat-display/TurnFrame.tsx` 新增 `isHighlighted` |
+> | 会话指示器呼吸动效 | 上游把四个布尔重构成 `runState` 判别式 → 动效加在 `needs-you` / `failed` 两支（= 上游自己的 `needsAttention` 定义），**刻意不给 `plan`**（持久状态，废弃会话会让它一直动） |
+> | 侧栏徽标 | 上游 `sidebarLinks` 数组；`ml-auto` 不再需要（标题 `flex-1` 推开） |
+> | 收藏夹 / 可视化画廊入口 | `sidebarFooterLinks`，排在 Settings 前 |
+> | 轨迹视图 | 按钮 + overlay **整个搬进 `ChatHeader`**（自包含）；`sdkSessionId`/`sdkCwd` 在 `Session` 而非 `SessionMeta`，需显式传入并纳入 `sameHeaderProps` 比较 |
+> | 导出 Markdown | 处理函数留在 ChatPage（要 `session.messages`），**经 ref 包装成身份恒定的回调**再传给按字段 memo 的 ChatHeader —— 直接传会让它拿到陈旧闭包 |
+> | 列头批量选择菜单 | 触发器改用上游 `IconButton`；尾部动作区包进 `ml-auto` 容器（挂在某个按钮上，它缺席时右对齐就塌） |
+> | 一次性引用 chip 的 ✕ | `input/FollowUpChips.tsx`（上游抽出的新组件） |
+> | AI 设置的 workspace 覆盖清扫器 | 逻辑自动合上；只有提示条 UI 要搬进上游新的 Default 区 |
+>
+> ### ✅ 「展开长回复」主动退场——定制被上游追平的第二例
+>
+> 上游新回复正文的注释原话是 **"plain copy on the transcript (no card, no inner scroll cap)"**，`MAX_HEIGHT = 540` 连同暗色渐隐遮罩一起没了——**我们那个开关做的事已经是上游的默认行为**。照 `decodeFilePath` 那次立的规矩**主动删除**：`atoms/chat-response-height.ts`、Appearance 开关、2 键 ×7 i18n 全部清掉。
+>
+> ### 顺手修掉两个自带的潜在 bug
+>
+> 我们有两处高亮写的是 `var(--primary)` / `ring-primary`，而**宿主根本没有这个变量**（品牌色叫 `--accent`，CLAUDE.md 里早记过）——等于看板选中环和跳转高亮环一直没上色。迁移时统一改用新 token `--accent-solid`。
+>
+> ### 其他要点
+>
+> - **i18n 冲突不能简单「我们在前、上游在后」**：这次 `chat.moreLabels*` 与 `chat.moreLines*` 键名穿插，必须按键名字典序归并。另注意 **pl.json 比其他语言多 10 个键是正常的**——波兰语有 one/few/many/other 四类复数，上游原版就如此。
+> - `taskRecency` 收敛到 `status-column.ts` 单一定义（渲染序与批量选择的区间序必须同源，两处定义必然漂移）。
+> - **测试基线更新**：electron/src **1106** pass / **6 fail**（全 BrowserPaneManager）；ui **379** 全绿；shared **3707** pass / **13 fail**；server-core **430** 全绿。**`PromptBuilder volatile/stable` 那条终于被上游修好了**（从 v0.13.4 坏到现在）。
+>
 > Baseline as of 2026-10-07: local main merged up to upstream **v0.14.1**（一次吃下 v0.13.6 / v0.14.0 / v0.14.1 三版）— 0 behind, 176 custom ahead. Merge commit `86788da3`, checkpoint 分支 `backup/main-pre-v0.14.1` @ 3edb9dc9。**近期最大的一次合并**：307 文件 / +18906 −19973。
 >
 > **v0.14.0 是功能大版本——「决策模型」(opt-in)**：Settings → AI 多了一张卡，接一个小而快的模型专门回答**带类型的问题**（选一个 / 打分 / 是或否），约 0.25 秒给出概率而不写文字；可用 Jev（TypeSafe / OpenRouter / Vercel AI Gateway，自带 key）或本机跑 **Laya**（`laya-serve`，免费）。**默认关，开之前什么都不外发**，每次调用只在 `~/.craft-agent/logs/decisions.jsonl` 记输入的哈希、不记输入本身。它带出一串子功能（各有独立开关）：**Guarded 权限模式**（介于 Ask to Edit 与 Execute 之间：Bash / MCP 写 / 非 GET 的 API 调用先过检查，难撤销、出项目、会碰到别人的操作才问你；检查跑不动就退化成 Ask to Edit，Execute 完全不碰决策模型）、agent 的 `decide` 工具（一次分类/打分最多 200 项）、自适应思考档位、中途消息判定（纠正 → steer / 另起 → 排队）、智能标题、风险徽标、大结果裁剪。v0.14.1 继续打磨（大结果改为"挑出 agent 要的那几段"，7–8 秒 → 约 0.5 秒）。
