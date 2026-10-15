@@ -395,6 +395,16 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-10-15: local main merged up to upstream **v0.15.1**（2026-10-13 发版）— 0 behind, 186 custom ahead. Merge commit `c2c7283d`, checkpoint 分支 `backup/main-pre-v0.15.1` @ 76f3dbcc。129 文件 / +8404 −1078，**零冲突、全自动合上**（`bun.lock` 也没冲突，历次第二回）。
+>
+> **这版不碰视觉**：`tokens.css` / `base.css` / `index.css` 一字未改，字体栈 0 处改动——v0.15.0 那套新设计原样保留。
+>
+> **主题是浏览器控制与后台任务**，几条直接影响日常：**停止只停回复**（不再连带杀掉它启起来的后台 agent / workflow / 命令，与 Claude Code 对齐）；**密码不进 transcript**（agent 在浏览器里输入的密码不再回显，存盘/导出/分享副本里替换为占位符）；**API key 按你填的 header 名发送**（此前自定义 header 名会被整段当成文本 `{"x-goog-api-key":"…"}` 发出去而认证失败）；**浏览器控制能操作隐藏窗口**（此前点击/按键/下拉只在窗口有焦点时生效，而它几乎从不有焦点）；**标注截图从约 15000 token 压成短行清单**；**"检测到安全验证"的误报大幅减少**；**并行会话共用一次登录**；超限附件给出点名文件和上限的提示，不再报 "Connection lost"。新功能两条：**MCP 资源与提示**（agent 可列出并读取 MCP server 除工具之外发布的 resources / prompts，Claude 与 Pi 会话各四个新工具）、**项目备忘改为追加式写入**（此前会话拿自己那份过期副本整体重写，会吞掉别的会话期间加的内容）。
+>
+> ⚠️ **判据三项全未变但仍重建了子进程**：Agent SDK 仍 0.3.296、Pi SDK 仍 1.1.0、`config/models{,-pi}.ts` 未变，`packages/pi-agent-server/` 只改了 package.json 的 version 字符串。**但它打包 `packages/shared`**，而 shared 这次新增了密码脱敏 / PDF 内联 / 消息限额等模块——实测装机版 bundle 里 `project-memory` 命中 0 处、重建后 1 处，确属过期。**判据再补一条：pi-agent-server 的改动不限于它自己的目录，它 bundle 进去的 `packages/shared` / `session-tools-core` 变了也要重建；最可靠的做法是重建后拿一个本版新字符串对照装机版 grep。** jiti 坑本次未触发（Pi SDK 未动）。
+>
+> **测试基线更新**：electron/src **1166** pass / **6 fail**（仍全是 BrowserPaneManager）；ui **379** 全绿；shared **2942** pass / **13 fail**（i18n 排序 ×7 + channel routing ×2 + ClaudeEventAdapter ×3 + GitHub OAuth 发现超时 ×1，全部上游既有）；server-core **476** 全绿；session-tools-core **165** 全绿。⚠️ **口径更正**：此前记的 shared "3707 pass" 是**不带 `/src`** 跑出来的（含 `dist/` 构建副本，CLAUDE.md 自己警告过的那个子串过滤坑）；同口径本次为 3799 pass / 13 fail。**此后 shared 一律以 `bun test packages/shared/src` 为准。**
+>
 > Baseline as of 2026-10-12: local main merged up to upstream **v0.15.0**（2026-10-11 发版）— 0 behind, 183 custom ahead. Merge commit `a8c9b905`, checkpoint 分支 `backup/main-pre-v0.15.0` @ 93dcc86f。**迄今最大的一次合并**：499 文件 / +24835 −15370，**28 个文件冲突、56 个冲突块**。
 >
 > **⭐ 一条修复值得单独说**：**自 0.14.1 起所有 MCP / API 数据源调用全是坏的**（Slack / Linear / Notion / Gmail 报 `_intent expected string, received undefined`，#1086）。我们在 0.14.1 上待了 5 天，期间数据源一直不可用。
