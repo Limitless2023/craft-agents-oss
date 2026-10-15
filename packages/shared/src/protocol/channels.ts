@@ -263,6 +263,7 @@ export const RPC_CHANNELS = {
     START: 'oauth:start',
     COMPLETE: 'oauth:complete',
     CANCEL: 'oauth:cancel',
+    STATUS: 'oauth:status',
     REVOKE: 'oauth:revoke',
   },
   workspace: {

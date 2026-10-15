@@ -186,6 +186,7 @@ const EXPECTED_CHANNELS: string[] = [
   'oauth:complete',
   'oauth:revoke',
   'oauth:start',
+  'oauth:status',
   'onboarding:clearClaudeOAuthState',
   'onboarding:deferSetup',
   'onboarding:exchangeClaudeCode',
