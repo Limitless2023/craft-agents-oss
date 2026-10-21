@@ -197,7 +197,11 @@ Agent 回答里内嵌**可交互 HTML 组件**（滑块/按钮/实时联动）�
 
 **Patching（三 feature 合并）:** files.ts 动 main → `build:renderer` + `build:main` + `build:preload` + `bash patch-app.sh`。i18n 新增 14 键 ×7（sidebar.vizGallery / vizGallery.* / sessionMenu.export* / export.*）。
 
-### User Message Copy — 用户消息一键复制
+### ~~User Message Copy — 用户消息一键复制~~ · 已退役 (v0.15.5)
+
+> **上游追平后主动删除（第三例）**：v0.15.5 的 "Copy your own messages"（社区 PR #458）做的就是同一件事，`UserMessageBubble.tsx` 整文件采用上游版，我们那段全部清除。**差别只在位置**：我们贴在气泡**下方右对齐**（微信/ChatGPT 惯例），上游放在气泡**左侧外**（`absolute right-full top-2.25`，用 `group/user-message` + 共享的 `HOVER_REVEAL`/`TurnIconButton`），理由写在注释里——按钮不占布局，隐藏时不会推动 transcript。上游复用了既有的 `useCopyToClipboard` hook 和助手页脚同一套原语，比我们自己那套 `useState` + 定时器更收敛。下面保留原记录备查。
+
+### User Message Copy — 原记录
 
 用户消息气泡**下方右对齐**的悬停复制按钮（微信/ChatGPT 惯例：视线和手停在右下；初版放过左缘，被用户否掉——工程省事不敌使用直觉）。hover 整条消息显形（`group/user-msg` 在外层容器，`-mt-2` 贴近气泡）；复制**可见正文** `displayContent`（已剥离 edit_request 隐藏段，不带内部标记）；Copy→Check 2s 视觉与助手回复页脚同款；空正文（纯附件消息）不显示按钮。i18n 复用现成 `common.copy/copied`，零新键。
 
@@ -395,6 +399,32 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-10-21: local main merged up to upstream **v0.15.5**（2026-10-21 发版；一次吃下 v0.15.2 / v0.15.3 / v0.15.4 / v0.15.5 四版）— 0 behind, 188 custom ahead. Merge commit `a1800283`, checkpoint 分支 `backup/main-pre-v0.15.5` @ 1ed56766。218 文件 / +10327 −904，**7 处冲突、全是加法型**。
+>
+> **这四版仍然不碰视觉**：`tokens.css` 只加了 3 行——GitHub 的 merged-PR 紫 `--git-merged`（注释写明"固定含义、不是主题角色"，给 PR 状态条用）；`base.css` / `index.css` 一字未改，字体栈 0 处改动。**v0.15.0 那套新设计四个版本过去一次没返工**。
+>
+> **内容**：v0.15.4 的主角是 **Coding 模式**（按会话开关，系统提示词 17K→2.4K 字符、只给编码必需工具；可新建 git worktree 当工作目录；聊天头部显示 PR 状态 + Resolve 冲突 / Fix 评论 / Fix CI 三个一键提示，agent 只在本地改不 push）。v0.15.5 全是小而贴手的社区 PR：**默认缩放**（Settings → Appearance，80–150%，⌘0 回到你的默认而非 100%）、**装机版终于有右键菜单**（此前只有 dev 构建有）、按状态分组的会话列表不再漏老会话、移除工作区改为先确认。v0.15.2 带 Chat Starters + 压缩窗口/子 agent 模型设置，并修了**所有直连 Anthropic API 会话全挂**（`tools.0.custom` additionalProperties，#1096）与**会话费用严重虚高**（29 轮会话显示 $578、实际 $62）。v0.15.3 修 HEIC 附件、`customEndpoint.maxTokens` 可配、"Compact context at" 终于对 Pi 会话生效。
+>
+> ⚠️ **v0.15.2 的费用修复直接落在我们的「Session Cost」定制上**（`session.tokenUsage.costUsd` → 模型下拉 context 页脚的 `· $x.xx`）——**那个数字此前一直是错的**（累计总额每轮重复相加、output token 漏算子 agent）。
+>
+> **七处冲突怎么解的**（用户当次指令：**涉及冲突或 feature 重复，以官方为准**）：
+>
+> | 文件 | 性质 | 解法 |
+> |---|---|---|
+> | `UserMessageBubble.tsx` | **feature 重复** | 整文件取上游，我们的复制按钮退役（见上方「已退役」记录） |
+> | `apps/electron/package.json` | 字典序插入撞车 | 并集：`heic-convert` 排在 `i18next` 前 |
+> | `AppShell.tsx` | memo 依赖数组 | 并集：上游 `chatStarters` + 我们的右侧栏五项 |
+> | `chat-header/ChatHeader.tsx` ×3 | import / props / 解构 | 并集：轨迹按钮与上游 PR 状态条在同一动作区并存 |
+> | `ChatPage.tsx` | 传给 ChatHeader 的 props | 并集：`sdkSessionId`/`sdkCwd`/`onExportMarkdown` + `prWatch` 三项 |
+> | `claude-agent.ts` | 上游给 `getSystemPrompt` 加了第 9 个参数 `this._agentProfile`（Coding 模式） | **取上游的调用签名、保留我们的 IIFE 记录器**——`recordSystemPrompt` 是轨迹视图第二档的唯一数据源，整段取上游会静默删掉一个功能而不是消掉一个重复 |
+> | `bun.lock` | 照旧 | `--theirs` + `bun install` |
+>
+> ⚠️ **子进程必须重建，判据这次有两条命中**：Agent SDK **0.3.296 → 0.3.302**（Claude Code 2.1.302 parity）；Pi SDK 仍 1.1.0、`config/models{,-pi}.ts` 未变；但 `packages/pi-agent-server/` 自身改了 8 文件（`session-settings.ts` +42、`custom-endpoint-models.ts` +33、`index.ts`），它 bundle 的 `packages/shared` 另有 51 文件变动。按上版新立的"拿本版新字符串对照装机版 grep"验证：`resolveMaxTokens` / `compactionReserveFor` 在新建 bundle 各 2 处、装机版各 **0** 处，确属过期。jiti 坑本次未触发（Pi SDK 未动）。
+>
+> **测试基线更新（全部以 `/src` 收窄口径为准）**：electron/src **1215** pass / **6 fail**（仍全是 BrowserPaneManager）；ui/src **363** 全绿；shared/src **2965** pass / 1 skip / **13 fail**（i18n 排序 ×7 + channel routing ×2 + ClaudeEventAdapter ×3 + GitHub OAuth 发现超时 ×1，全部上游既有，逐条核对过）；server-core **574** 全绿；session-tools-core **172** 全绿。
+>
+> ⚠️ **口径更正（ui，与上版 shared 同一个坑）**：历来记的 ui "379 全绿"是 **`bun test packages/ui`** 跑出来的（43 文件，含 `dist/` 构建副本）；同口径本次仍是 379/0，而 **`bun test packages/ui/src`** 是 363/0（40 文件）。**379 → 363 不是回归**——已核对上游与本次合并对 `packages/ui` 的测试文件零增删。**此后 ui 一律以 `bun test packages/ui/src` 为准。**
+>
 > Baseline as of 2026-10-15: local main merged up to upstream **v0.15.1**（2026-10-13 发版）— 0 behind, 186 custom ahead. Merge commit `c2c7283d`, checkpoint 分支 `backup/main-pre-v0.15.1` @ 76f3dbcc。129 文件 / +8404 −1078，**零冲突、全自动合上**（`bun.lock` 也没冲突，历次第二回）。
 >
 > **这版不碰视觉**：`tokens.css` / `base.css` / `index.css` 一字未改，字体栈 0 处改动——v0.15.0 那套新设计原样保留。
@@ -602,7 +632,7 @@ bash patch-app.sh
 - Building a standalone "Craft L Agents" app fails on macOS 26 due to strict code signing enforcement on ad-hoc signed Electron apps
 - **⚠️ Pi SDK version skew (subprocess vs main):** `resources/pi-agent-server/index.js` bundles its *own copy* of the Pi SDK (`@earendil-works/pi-ai` model catalog) — it is **not** rebuilt by `build:renderer` or `build:main`. After a Pi SDK upgrade, `main.cjs` learns new models (e.g. `deepseek-v4-pro/flash`) and the UI offers them, but a **stale `pi-agent-server` subprocess can't resolve them** → it falls back to the default summarization model (`claude-haiku`) under provider `anthropic`, which has no API key → raw `No API key found for anthropic` → the setup screen shows the misleading **"Provider mismatch during setup"**. Fix: `bun run server:build:subprocess` (rebuilds `pi-agent-server` + `session-mcp-server`) **before** `bash patch-app.sh` so the subprocess SDK matches `main.cjs`. Diagnose with `grep -c deepseek-v4-pro "/Applications/Craft Agents.app/Contents/Resources/app/resources/pi-agent-server/index.js"` (0 = stale).
 - **Stale `.bun` symlinks block `server:build:subprocess` AND hang `bun test`:** an old isolated-linker install can leave dangling `packages/*/node_modules/*` (and `apps/*/node_modules/*`) symlinks pointing at a now-missing `node_modules/.bun/` store, which makes `bun build` fail with `File not found …/node_modules/<pkg>` — and makes `bun test` **hang indefinitely with zero output** after ENOENT module-resolution errors（2026-07-18 排查：apps/electron 下 57 个 4 月遗留悬空链接，悬空链接截胡解析、不落回根 hoist 包）. Clear them (safe — all dangling): `find apps/*/node_modules packages/*/node_modules -maxdepth 2 -type l ! -exec test -e {} \; -print -delete`
-- **`bun test` 目录参数是子串过滤，不是目录**：`bun test apps/electron` 会把 `dist/` 里的构建副本也当测试跑（同名用例 ×2/×3、224 文件），务必用 **`bun test apps/electron/src`** 这类 src 收窄写法。
+- **`bun test` 目录参数是子串过滤，不是目录**：`bun test apps/electron` 会把 `dist/` 里的构建副本也当测试跑（同名用例 ×2/×3、224 文件），务必用 **`bun test apps/electron/src`** 这类 src 收窄写法。（**此坑已两次让人误判回归**：shared 的 3707→2942 与 ui 的 379→363 都只是从「不带 /src」换成「带 /src」。标准口径一律是 `apps/electron/src` / `packages/ui/src` / `packages/shared/src`。）
 - **测试基线（2026-07-18，HEAD=viz 三连提交后）**：ui 324 全绿；electron/src 891 pass / **8 fail 全在 `browser-pane-manager.test.ts`（上游既有，pre-viz 同败）**；shared 2160 pass / 13 fail 全部上游既有（i18n 排序 parity ×7——locale 文件上游本就非全排序、我们插键只保持局部有序；channel routing ×2；ClaudeEventAdapter ×3）。判定回归时以此为基线，别把上游债当成自己的锅。
 
 ## Commands
