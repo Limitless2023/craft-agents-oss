@@ -21,6 +21,7 @@ import type { FileAttachment } from '../utils/files.ts';
 import { expandPath } from '../utils/paths.ts';
 import { buildTransferredSessionContext } from './conversation-summary.ts';
 import type { ThinkingLevel } from './thinking-levels.ts';
+import type { AgentProfile } from '@craft-agent/session-tools-core';
 import { DEFAULT_THINKING_LEVEL, normalizeThinkingLevel } from './thinking-levels.ts';
 import type { PermissionMode } from './mode-manager.ts';
 import type { LoadedSource } from '../sources/types.ts';
@@ -49,6 +50,7 @@ import type { Workspace } from '../config/storage.ts';
 // Core modules
 import { PermissionManager } from './core/permission-manager.ts';
 import type { GuardedModeCheck } from './core/guarded-mode.ts';
+import type { SubagentModelPicker } from './core/subagent-model.ts';
 import { SourceManager } from './core/source-manager.ts';
 import { PromptBuilder } from './core/prompt-builder.ts';
 import { PathProcessor } from './core/path-processor.ts';
@@ -183,6 +185,7 @@ export abstract class BaseAgent implements AgentBackend {
   // ============================================================
   protected _model: string;
   protected _thinkingLevel: ThinkingLevel;
+  protected _agentProfile: AgentProfile;
 
   // ============================================================
   // Core Modules (protected for subclass access)
@@ -254,6 +257,8 @@ export abstract class BaseAgent implements AgentBackend {
   onPermissionRequest: PermissionCallback | null = null;
   /** Guarded-mode risk check (decision model): may turn an allowed call into a prompt, never the reverse. */
   guardedModeCheck: GuardedModeCheck | null = null;
+  /** Subagent model choice (decision model, Claude only): picks a cheaper model for an Agent call. */
+  subagentModelPicker: SubagentModelPicker | null = null;
   onPlanSubmitted: PlanCallback | null = null;
   onAuthRequest: AuthCallback | null = null;
   onSourceChange: SourceChangeCallback | null = null;
@@ -277,6 +282,7 @@ export abstract class BaseAgent implements AgentBackend {
     this._sessionId = config.session?.id || `agent-${Date.now()}`;
     this._model = config.model || defaultModel;
     this._thinkingLevel = normalizeThinkingLevel(config.thinkingLevel) ?? DEFAULT_THINKING_LEVEL;
+    this._agentProfile = config.agentProfile ?? 'default';
 
     // Initialize core modules
     // PermissionManager: handles permission evaluation, mode management, and command whitelisting
@@ -301,6 +307,7 @@ export abstract class BaseAgent implements AgentBackend {
       debugMode: config.debugMode,
       systemPromptPreset: config.systemPromptPreset,
       isHeadless: config.isHeadless,
+      agentProfile: config.agentProfile,
     });
 
     // PathProcessor: expands ~ and normalizes paths
@@ -424,6 +431,16 @@ export abstract class BaseAgent implements AgentBackend {
   setThinkingLevel(level: ThinkingLevel): void {
     this._thinkingLevel = level;
     this.debug(`Thinking level set to: ${level}`);
+  }
+
+  getAgentProfile(): AgentProfile {
+    return this._agentProfile;
+  }
+
+  setAgentProfile(profile: AgentProfile): void {
+    this._agentProfile = profile;
+    this.promptBuilder.setAgentProfile(profile);
+    this.debug(`Agent profile set to: ${profile}`);
   }
 
   // ============================================================

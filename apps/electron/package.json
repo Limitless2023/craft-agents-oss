@@ -1,6 +1,6 @@
 {
   "name": "@craft-agent/electron",
-  "version": "0.15.1",
+  "version": "0.15.5",
   "description": "Electron desktop app for Craft Agents",
   "main": "dist/main.cjs",
   "private": true,
@@ -64,6 +64,7 @@
     "diff": "^8.0.2",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.8.0",
+    "heic-convert": "^2.1.0",
     "i18next": "^26.0.7",
     "i18next-browser-languagedetector": "^8.2.1",
     "jotai-family": "^1.0.1",

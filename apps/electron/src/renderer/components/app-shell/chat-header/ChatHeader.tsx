@@ -1,8 +1,9 @@
 /**
  * ChatHeader — the chat panel's header (design spec §7.3).
  *
- * Desktop: status glyph · title (click to rename) · "workspace · folder" · label chips · Info ·
- * Share · ⋯ · close. Session metadata lives here rather than in a badge row above the composer.
+ * Desktop: status glyph · title (click to rename) · "workspace · folder" · PR chip (Coding mode) ·
+ * label chips · Info · Share · ⋯ · close. Session metadata lives here rather than in a badge row
+ * above the composer.
  *
  * Compact shell: back · status glyph · title · ⋯. The drawer behind ⋯ also holds Session info and
  * Share, and the status glyph opens it on its Status pane. The panel's close button is dropped:
@@ -31,6 +32,9 @@ import { ChatHeaderStatusButton } from './ChatHeaderStatusButton'
 import { ChatHeaderLabels } from './ChatHeaderLabels'
 import { ChatShareMenu } from './ChatShareMenu'
 import { TrajectoryOverlay } from '@/components/trajectory/TrajectoryOverlay'
+import { CHAT_HEADER_CODING_MAX_LABELS } from './label-strip-layout'
+import { ChatHeaderPrChip } from './pr-watch/ChatHeaderPrChip'
+import { isPrWatchVisible, type PrWatchState } from './pr-watch/pr-watch-state'
 
 export interface ChatHeaderProps {
   sessionId: string
@@ -52,6 +56,11 @@ export interface ChatHeaderProps {
    * ChatPage 已用 ref 包装过。
    */
   onExportMarkdown?: () => void
+  /** The branch's pull request; shown only for Coding-mode sessions, on the desktop layout */
+  prWatch?: PrWatchState
+  onRefreshPrWatch?: () => void
+  /** The PR card opened or closed (details load while it is open) */
+  onPrCardOpenChange?: (open: boolean) => void
 }
 
 type DrawerState = { open: boolean; view: 'root' | 'status' }
@@ -76,6 +85,9 @@ function sameHeaderProps(prev: ChatHeaderProps, next: ChatHeaderProps): boolean 
     && prev.sdkCwd === next.sdkCwd
     && prev.workingDirectory === next.workingDirectory
     && prev.sessionFolderPath === next.sessionFolderPath
+    && prev.prWatch === next.prWatch
+    && prev.onRefreshPrWatch === next.onRefreshPrWatch
+    && prev.onPrCardOpenChange === next.onPrCardOpenChange
     && sameFields(prev.item, next.item)
 }
 
@@ -90,6 +102,9 @@ export const ChatHeader = React.memo(function ChatHeader({
   sdkSessionId,
   sdkCwd,
   onExportMarkdown,
+  prWatch,
+  onRefreshPrWatch,
+  onPrCardOpenChange,
 }: ChatHeaderProps) {
   const { t } = useTranslation()
   const [trajectoryOpen, setTrajectoryOpen] = React.useState(false)
@@ -199,6 +214,10 @@ export const ChatHeader = React.memo(function ChatHeader({
   // ("Design Audit · design-audit") was noise that competed with the title.
   const folderName = sessionFolderPath ? deriveSelectionFlags(workingDirectory, sessionFolderPath).folderName : undefined
   const meta = folderName ?? ''
+  const codingMode = !!item?.codingMode
+  const showPrChip = codingMode && !compact && isPrWatchVisible(prWatch)
+  // The PR chip, measured by the label strip (state: it mounts after the strip's first layout)
+  const [prReserveEl, setPrReserveEl] = React.useState<HTMLElement | null>(null)
 
   const titleRow = (
     <div ref={setTitleRowEl} className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -234,8 +253,18 @@ export const ChatHeader = React.memo(function ChatHeader({
           {meta}
         </span>
       )}
+      {showPrChip && prWatch && (
+        <ChatHeaderPrChip sessionId={sessionId} state={prWatch} onRefresh={onRefreshPrWatch} onCardOpenChange={onPrCardOpenChange} onReserveElChange={setPrReserveEl} />
+      )}
       {item && !compact && (
-        <ChatHeaderLabels item={item} labels={labels} onLabelsChange={handleLabelsChange} rowEl={titleRowEl} />
+        <ChatHeaderLabels
+          item={item}
+          labels={labels}
+          onLabelsChange={handleLabelsChange}
+          rowEl={titleRowEl}
+          maxLabels={codingMode ? CHAT_HEADER_CODING_MAX_LABELS : undefined}
+          reserveEl={showPrChip ? prReserveEl : null}
+        />
       )}
     </div>
   )

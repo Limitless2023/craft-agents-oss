@@ -8,17 +8,20 @@
  * - Optional file attachments with thumbnails
  * - Content badges for @mentions (sources, skills)
  * - Pending/queued states (Electron only)
- * - Hover-revealed copy button (copies the visible message text)
+ * - Copy button left of the bubble, revealed on hover/focus like the answer footer (not in compact mode)
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Clock, Copy } from 'lucide-react'
 import type { StoredAttachment, ContentBadge } from '@craft-agent/core'
 import { normalizePath } from '@craft-agent/core/utils'
 import { cn } from '../../lib/utils'
+import { useCopyToClipboard } from '../../lib/use-copy-to-clipboard'
 import { Markdown } from '../markdown'
 import { FileTypeIcon, getFileTypeLabel } from './attachment-helpers'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../tooltip'
+import { TurnIconButton } from './turn/TurnIconButton'
+import { HOVER_REVEAL } from './turn/turn-classes'
 import { useTranslation } from 'react-i18next'
 
 // Fallback text icons for badges without iconDataUrl
@@ -343,6 +346,7 @@ export function UserMessageBubble({
   compactMode,
 }: UserMessageBubbleProps) {
   const { t } = useTranslation()
+  const { copied, copy } = useCopyToClipboard()
   const hasAttachments = attachments && attachments.length > 0
 
   // Show the queued chip while `isQueued` is true AND for at least
@@ -393,14 +397,6 @@ export function UserMessageBubble({
     }, remaining)
   }, [isQueued])
 
-  // 复制状态：与助手回复页脚的 Copy→Check 同一套视觉语言（2s 后还原）
-  const [copied, setCopied] = useState(false)
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    return () => {
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
-    }
-  }, [])
   // 82% of the column, 90% in compact layouts (popover, compact shell)
   const maxWidth = compactMode ? 'max-w-[90%]' : 'max-w-[82%]'
 
@@ -423,23 +419,8 @@ export function UserMessageBubble({
     displayContent = displayContent.trim()
   }
 
-  // 复制"可见的消息正文"（displayContent，已剥离 edit_request 隐藏段）——
-  // 用户想要的是自己看到并发出的那段话，不是内部标记
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(displayContent)
-      setCopied(true)
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
-      copyTimerRef.current = setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }, [displayContent])
-
-  const showCopyButton = displayContent.trim().length > 0
-
   return (
-      <div className={cn("group/user-msg flex w-full flex-col items-end gap-2", className)}>
+    <div className={cn("flex w-full flex-col items-end gap-2", className)}>
       {/* Attachment preview row - stored attachments with thumbnails */}
       {hasAttachments && (
         <div className={cn("flex flex-wrap justify-end gap-2", maxWidth)}>
@@ -512,59 +493,52 @@ export function UserMessageBubble({
           inside the bubble (Clock icon + 'Queued' italic) instead of a
           separate pill below — keeps the chat to one bubble per message
           while the chip and pulsing icon make the waiting state obvious
-          (#616 follow-up). */}
-      <div
-        className={cn(
-          "min-w-0 select-text break-words rounded-xl bg-user-message-bubble px-3.5 py-2.25 text-copy text-foreground [&_p]:m-0",
-          maxWidth
-        )}
-      >
-        {showQueued && (
+          (#616 follow-up). The copy button sits left of the bubble, out of the
+          layout, so a hidden button never moves the transcript. */}
+      <div className={cn("group/user-message relative min-w-0", maxWidth)}>
+        {!compactMode && (
           <div
-            className="mb-1 flex items-center gap-1.5 text-tertiary"
-            role="status"
-            aria-live="polite"
-          >
-            <Clock className="size-3 animate-pulse" aria-hidden="true" />
-            <span className="text-caption font-normal italic">{t('chat.queuedBadge')}</span>
-          </div>
-        )}
-        {hasInlineBadges
-          ? renderContentWithBadges(displayContent, inlineBadges, onUrlClick, onFileClick)
-          : (
-            <Markdown
-              mode="minimal"
-              onUrlClick={onUrlClick}
-              onFileClick={onFileClick}
-              className={BUBBLE_MARKDOWN}
-            >
-              {displayContent}
-            </Markdown>
-          )
-        }
-      </div>
-
-      {/* 气泡下方右对齐的悬停操作行（微信/ChatGPT 惯例：视线和手都停在右下）。
-          -mt-2 抵消父容器 gap-3 的一部分，让按钮行贴近气泡；hover 作用域为
-          整条消息（group/user-msg 在外层容器），空正文（纯附件）不渲染 */}
-      {showCopyButton && (
-        <div className="-mt-2 flex justify-end pr-1">
-          <button
-            type="button"
-            onClick={() => void handleCopy()}
-            title={t(copied ? 'common.copied' : 'common.copy')}
-            aria-label={t(copied ? 'common.copied' : 'common.copy')}
+            data-touch-reveal="true"
             className={cn(
-              'grid h-6 w-6 place-items-center rounded-md transition-[color,opacity] select-none',
-              'opacity-0 group-hover/user-msg:opacity-100 focus-visible:opacity-100',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-              copied ? 'text-success opacity-100' : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05]'
+              HOVER_REVEAL,
+              "absolute right-full top-2.25 mr-1 group-hover/user-message:opacity-100 group-hover/user-message:duration-instant"
             )}
           >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          </button>
+            <TurnIconButton
+              aria-label={copied ? t('common.copied') : t('common.copy')}
+              tooltip
+              icon={copied ? <Check className="size-3.5 text-success" /> : <Copy />}
+              onClick={() => copy(displayContent)}
+              className="select-none"
+            />
+          </div>
+        )}
+        <div className="min-w-0 select-text break-words rounded-xl bg-user-message-bubble px-3.5 py-2.25 text-copy text-foreground [&_p]:m-0">
+          {showQueued && (
+            <div
+              className="mb-1 flex items-center gap-1.5 text-tertiary"
+              role="status"
+              aria-live="polite"
+            >
+              <Clock className="size-3 animate-pulse" aria-hidden="true" />
+              <span className="text-caption font-normal italic">{t('chat.queuedBadge')}</span>
+            </div>
+          )}
+          {hasInlineBadges
+            ? renderContentWithBadges(displayContent, inlineBadges, onUrlClick, onFileClick)
+            : (
+              <Markdown
+                mode="minimal"
+                onUrlClick={onUrlClick}
+                onFileClick={onFileClick}
+                className={BUBBLE_MARKDOWN}
+              >
+                {displayContent}
+              </Markdown>
+            )
+          }
         </div>
-      )}
+      </div>
     </div>
   )
 }

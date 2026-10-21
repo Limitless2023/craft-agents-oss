@@ -80,7 +80,8 @@ import {
 } from './core/pre-tool-use.ts';
 import { applyGuardedModeCheck, needsGuardedModeCheck } from './core/guarded-mode.ts';
 import { getRtkPath } from './core/rtk-detector.ts';
-import { getRtkEnabled, getRtkExcludeCommands } from '../config/storage.ts';
+import { getRtkEnabled, getRtkExcludeCommands, getSubagentModel } from '../config/storage.ts';
+import { chooseSubagentModel } from './core/subagent-model.ts';
 import type { RtkContext } from './core/rtk-rewrite.ts';
 import { type ThinkingLevel, THINKING_TO_EFFORT, getThinkingTokens, DEFAULT_THINKING_LEVEL } from './thinking-levels.ts';
 import { generateConversationSummary } from './conversation-summary.ts';
@@ -269,6 +270,8 @@ export interface ClaudeAgentConfig {
   connectionSlug?: string;
   /** Enable 1M context window for current Opus models. Default: true. Set false to use 200K and conserve usage limits. */
   enable1MContext?: boolean;
+  /** Auto-compact window in tokens (config.json `autoCompactWindow`). Unset: the SDK default (the model's full window). */
+  autoCompactWindow?: number;
 }
 
 // Permission request tracking
@@ -1066,6 +1069,12 @@ export class ClaudeAgent extends BaseAgent {
   // "Always Allow" keys come with each prompt (PromptInfo.remember) and are applied via
   // this.permissionManager.remember(); see core/permission-remember.ts
 
+  /** Whether this session talks to Anthropic directly, where the Agent tool's model aliases resolve. */
+  private usesFirstPartyClaude(): boolean {
+    const connection = this.config.connectionSlug ? getLlmConnection(this.config.connectionSlug) : null;
+    return connection?.providerType === 'anthropic' && (connection.authType === 'oauth' || connection.authType === 'api_key');
+  }
+
   /**
    * Respond to a pending permission request.
    * Uses permissionManager for whitelisting.
@@ -1197,7 +1206,11 @@ export class ClaudeAgent extends BaseAgent {
       // Build full MCP servers set first, then filter for mini agents
       const fullMcpServers: Options['mcpServers'] = {
         // Session-scoped tools (SubmitPlan, source_test, update_user_preferences, transform_data, etc.)
-        session: getSessionScopedTools(sessionId, this.workspaceRootPath),
+        session: getSessionScopedTools(sessionId, this.workspaceRootPath, undefined, {
+          profile: this._agentProfile,
+          hasEnabledSources: this.sourceManager.getIntendedSlugs().size > 0,
+          hasProject: !!this.config.session?.projectId,
+        }),
         // Per-source proxy servers from centralized MCP pool (MCP + API sources)
         // Each source gets its own SDK server keyed by slug (e.g., 'linear', 'github', 'gmail')
         // so the SDK produces correct tool names: mcp__{slug}__{toolName}
@@ -1276,6 +1289,9 @@ export class ClaudeAgent extends BaseAgent {
       const options: Options = {
         ...getDefaultOptions(this.config.envOverrides),
         model: effectiveModel,
+        // Compact earlier than the SDK default (the model's full window, 1M on first-party Opus even
+        // without the [1m] suffix): every call re-reads the whole context. Subagents inherit it.
+        ...(this.config.autoCompactWindow ? { settings: { autoCompactWindow: this.config.autoCompactWindow } } : {}),
         // Capture stderr from SDK subprocess for error diagnostics
         // This helps identify why sessions fail with "process exited with code 1"
         stderr: (data: string) => {
@@ -1343,6 +1359,7 @@ export class ClaudeAgent extends BaseAgent {
                   undefined, // backendName
                   this.pinnedIncludeCoAuthoredBy ?? undefined,
                   this.pinnedProjectContext ?? undefined,
+                  this._agentProfile,
                 );
                 // Trajectory view, tier 2: the SDK transcript records everything the
                 // model received EXCEPT the system prompt — that part is assembled
@@ -1493,10 +1510,29 @@ export class ClaudeAgent extends BaseAgent {
                 });
               }
 
+              // Agent calls that name no model get the decision model's pick or the Settings default,
+              // when cheaper than the session's model (first-party Claude only: aliases may not resolve elsewhere).
+              const subagentModel = (checkResult.type === 'allow' || checkResult.type === 'modify')
+                && (input.tool_name === 'Agent' || input.tool_name === 'Task') && this.usesFirstPartyClaude()
+                ? await chooseSubagentModel(checkResult.type === 'modify' ? checkResult.input : toolInput, this._model, {
+                    configured: getSubagentModel(),
+                    picker: this.subagentModelPicker,
+                  })
+                : undefined;
+
               // Translate result to SDK format. The wrapper drains steers only
               // after this hook returns an emitting allow/modify result.
               switch (checkResult.type) {
                 case 'allow':
+                  if (subagentModel) {
+                    return {
+                      continue: true,
+                      hookSpecificOutput: {
+                        hookEventName: 'PreToolUse' as const,
+                        updatedInput: { ...toolInput, model: subagentModel },
+                      },
+                    };
+                  }
                   return { continue: true };
 
                 case 'modify':
@@ -1504,7 +1540,7 @@ export class ClaudeAgent extends BaseAgent {
                     continue: true,
                     hookSpecificOutput: {
                       hookEventName: 'PreToolUse' as const,
-                      updatedInput: checkResult.input,
+                      updatedInput: subagentModel ? { ...checkResult.input, model: subagentModel } : checkResult.input,
                     },
                   };
 
@@ -2604,7 +2640,7 @@ This is a branched conversation. All prior messages in this conversation are par
     )
     const contextParts = this.promptBuilder.buildContextParts(
       { plansFolderPath: getSessionPlansPath(this.workspaceRootPath, this.modeSessionId) },
-      this.sourceManager.formatSourceState()
+      this.sourceManager.formatSourceState({ activeOnly: this._agentProfile === 'coding' })
     );
 
     parts.push(...contextParts);
@@ -2650,7 +2686,7 @@ This is a branched conversation. All prior messages in this conversation are par
     )
     const contextParts = this.promptBuilder.buildContextParts(
       { plansFolderPath: getSessionPlansPath(this.workspaceRootPath, this.modeSessionId) },
-      this.sourceManager.formatSourceState()
+      this.sourceManager.formatSourceState({ activeOnly: this._agentProfile === 'coding' })
     );
 
     for (const part of contextParts) {

@@ -58,6 +58,7 @@ import {
   getSessionPath as getSessionStoragePath,
   ensureSessionDir,
   getSessionFilePath,
+  readSessionHeader,
   generateSessionId,
   sessionPersistenceQueue,
   getHeaderMetadataSignature,
@@ -110,6 +111,7 @@ import { isDecisionFeatureActive, type DecisionLayerFeature, type DecisionResult
 import { setLargeResultFilter } from '@craft-agent/shared/utils'
 import { buildLargeResultFilter, finishLargeResultExcerpts, noteLargeResultFileUse } from '../decisions/large-results'
 import { buildGuardedModeCheck } from '../decisions/guarded-mode'
+import { buildSubagentModelPicker } from '../decisions/subagent-models'
 import { assessPermissionRisks } from '../decisions/permission-risks'
 import { checkAutomationCondition } from '../decisions/automation-condition'
 import { listLabels, loadLabelConfig } from '@craft-agent/shared/labels/storage'
@@ -119,6 +121,7 @@ import { loadStatusConfig } from '@craft-agent/shared/statuses/storage'
 import { AutomationSystem, createPromptHistoryEntry, appendAutomationHistoryEntry, type AutomationSystemMetadataSnapshot, type PendingPrompt } from '@craft-agent/shared/automations'
 import { buildBackendRuntimeSignature, buildRestartRequiredSignature, filterAttachmentsForModelInput } from './runtime-config'
 import { validateArchiveTarget } from './archive-guards'
+import { addTurnUsage, branchStartTotals, type BranchParent } from './turn-usage'
 
 // Import from server-core domain utilities
 import { sanitizeForTitle, shouldActivateBrowserOverlay, normalizeBrowserToolName, rollbackFailedBranchCreation, releaseBrowserOwnershipOnForcedStop } from '@craft-agent/server-core/domain'
@@ -766,6 +769,8 @@ interface ManagedSession {
     contextWindow?: number
     /** Current occupancy, separate from cumulative/billable counters. */
     contextUsage?: ContextUsageSnapshot
+    /** Backend running totals already counted into costUsd/outputTokens (see `addTurnUsage`). */
+    lastRunningTotals?: { costUsd: number; outputTokens: number }
   }
   // Session status (user-controlled) - determines open vs closed
   // Dynamic status ID referencing workspace status config
@@ -815,6 +820,8 @@ interface ManagedSession {
   connectionLocked?: boolean
   // Thinking level for this session ('off', 'think', 'max')
   thinkingLevel?: ThinkingLevel
+  // Coding mode: lean coding prompt + session-tool profile (fixed once the session has messages)
+  codingMode?: boolean
   // System prompt preset for mini agents ('default' | 'mini')
   systemPromptPreset?: 'default' | 'mini' | string
   // Role/type of the last message (for badge display without loading messages)
@@ -1054,6 +1061,17 @@ export const MAX_AUTOMATION_CHAIN_DEPTH = 3
 export function isAttendedSession(managed: ManagedSession): boolean {
   return !(managed.triggeredBy || managed.taskRunId || managed.taskSlug || managed.hidden || managed.unattended
     || managed.systemPromptPreset === 'mini')
+}
+
+/**
+ * Whether the session's conversation has started. The agent's system prompt and tool set are fixed
+ * from then on (Claude pins the prompt per SDK session; the keep-alive query fixes its tools), so
+ * per-session settings that shape them, like coding mode, can only change before this.
+ */
+export function hasConversationStarted(managed: Pick<ManagedSession, 'sdkSessionId' | 'messageCount' | 'messages'>): boolean {
+  return !!managed.sdkSessionId
+    || (managed.messageCount ?? 0) > 0
+    || managed.messages.some(m => m.role === 'user')
 }
 
 /**
@@ -2371,7 +2389,7 @@ export class SessionManager implements ISessionManager {
    * Bun's automatic .env loading is disabled in the subprocess (--env-file=/dev/null)
    * to prevent a user's project .env from injecting ANTHROPIC_API_KEY and overriding
    * OAuth auth — Claude Code prioritizes API key over OAuth token when both are set.
-   * See: https://github.com/lukilabs/craft-agents-oss/issues/39
+   * See: https://github.com/craft-ai-agents/craft-agents-oss/issues/39
    */
   /**
    * Reinitialize authentication environment variables.
@@ -2554,6 +2572,13 @@ export class SessionManager implements ISessionManager {
       sessionLog.warn('Could not canonicalize session labels:', e)
       return labels
     }
+  }
+
+  /** The session a branch was forked from: live in memory, else its header on disk. */
+  private branchParent(managed: ManagedSession): BranchParent | null {
+    if (!managed.branchFromSessionPath) return null
+    const parentId = basename(managed.branchFromSessionPath)
+    return this.sessions.get(parentId) ?? readSessionHeader(getSessionFilePath(managed.workspace.rootPath, parentId))
   }
 
   // Suppress fs.watch metadata-revert events for the window in which our own
@@ -3268,6 +3293,8 @@ export class SessionManager implements ISessionManager {
 
     // Validate branch request up-front so branch metadata is only set for valid branches.
     // This prevents creating sessions that claim to be branched but don't have copied history.
+    // A branch keeps its parent's coding mode: an SDK fork carries the parent's pinned system prompt.
+    let branchSourceCodingMode: boolean | undefined
     let validatedBranch: {
       sourceSessionId: string
       sourceMessageId: string
@@ -3309,6 +3336,7 @@ export class SessionManager implements ISessionManager {
       }
 
       const sourceSession = loadStoredSession(workspaceRootPath, options.branchFromSessionId)
+      branchSourceCodingMode = sourceManaged?.codingMode ?? sourceSession?.codingMode
       if (!sourceSession) {
         sessionLog.warn('Branch validation failed: source session not found on disk', {
           workspaceId,
@@ -3558,6 +3586,8 @@ export class SessionManager implements ISessionManager {
       model: resolvedModel,
       llmConnection: options?.llmConnection,
       thinkingLevel: defaultThinkingLevel,
+      // Coding mode: branch source → caller → workspace default. Stored only when on, so default sessions stay unchanged.
+      codingMode: (validatedBranch ? branchSourceCodingMode : options?.codingMode ?? wsConfig?.defaults?.codingMode) || undefined,
       systemPromptPreset: options?.systemPromptPreset,
       enabledSourceSlugs: defaultEnabledSourceSlugs,
       branchFromMessageId: validatedBranch?.sourceMessageId,
@@ -4021,6 +4051,8 @@ export class SessionManager implements ISessionManager {
         // Retire branch-only fork metadata now that child session is established
         if (managed.branchFromSdkSessionId) {
           sessionLog.info(`Branch fork established for ${managed.id}: child=${sdkSessionId}, retiring parent fork metadata (parent=${managed.branchFromSdkSessionId})`)
+          const startTotals = branchStartTotals(this.branchParent(managed), managed.branchFromSdkSessionId)
+          if (startTotals) managed.tokenUsage = { ...(managed.tokenUsage ?? DEFAULT_TOKEN_USAGE), lastRunningTotals: startTotals }
           managed.branchFromSdkSessionId = undefined
           managed.branchFromSdkCwd = undefined
           managed.branchFromSdkTurnId = undefined
@@ -4156,8 +4188,10 @@ export class SessionManager implements ISessionManager {
         skipConfigWatcher: true, // Server owns workspace-level ConfigWatcher — don't duplicate in agents
         automationSystem: this.automationSystems.get(managed.workspace.rootPath),
         systemPromptPreset: managed.systemPromptPreset,
+        agentProfile: managed.codingMode ? 'coding' : undefined,
         debugMode: _platform?.isDebugMode ? { enabled: true, logFilePath: _platform.getLogFilePath?.() } : undefined,
         enable1MContext: await (async () => { const { getEnable1MContext } = await import('@craft-agent/shared/config/storage'); return getEnable1MContext(); })(),
+        autoCompactWindow: await (async () => { const { getAutoCompactWindow } = await import('@craft-agent/shared/config/storage'); return getAutoCompactWindow(); })(),
         // Image resize callback — prevents oversized images from entering conversation history
         onImageResize: async (filePath: string, maxSizeBytes: number): Promise<string | null> => {
           try {
@@ -4574,6 +4608,12 @@ export class SessionManager implements ISessionManager {
         sessionId: managed.id,
         log: (line) => sessionLog.info(line),
         isInteractive: () => isAttendedSession(managed),
+      })
+      // Subagent model choice (decision model, toggle `subagentModels`): the Claude agent asks it
+      // for Agent calls that name no model; no answer leaves the Settings default in charge.
+      managed.agent.subagentModelPicker = buildSubagentModelPicker({
+        sessionId: managed.id,
+        log: (line) => sessionLog.info(line),
       })
 
       managed.agent.onPermissionRequest = (request: {
@@ -8367,6 +8407,61 @@ export class SessionManager implements ISessionManager {
   }
 
   /**
+   * Turn coding mode on or off: the lean coding system prompt and session-tool profile.
+   * Only before the conversation starts (see {@link hasConversationStarted}); after that the UI
+   * offers to continue in a new session instead, so this throws.
+   */
+  setSessionCodingMode(sessionId: string, enabled: boolean): void {
+    const managed = this.sessions.get(sessionId)
+    if (!managed || !!managed.codingMode === enabled) return
+    if (hasConversationStarted(managed)) {
+      throw new Error('Coding mode is fixed once a session has messages. Continue in a new session to switch it.')
+    }
+
+    // Stored only when on, so sessions that never use it keep an unchanged header
+    managed.codingMode = enabled || undefined
+    managed.agent?.setAgentProfile(enabled ? 'coding' : 'default')
+
+    sessionLog.info(`Session ${sessionId}: coding mode ${enabled ? 'on' : 'off'}`)
+    this.persistSession(managed)
+    this.sendEvent({ type: 'coding_mode_changed', sessionId, codingMode: enabled }, managed.workspace.id)
+  }
+
+  /**
+   * Continue a started session in a new one with coding mode set to `codingMode` (coding mode is
+   * fixed once a conversation starts, see {@link setSessionCodingMode}). The new session keeps the
+   * working directory, model, connection, thinking level, permission mode, sources and project, and
+   * gets a summary of this conversation as one-shot hidden context on its first turn (the same
+   * handoff remote transfers use). The source session is left untouched.
+   */
+  async continueSessionInNewSession(sessionId: string, codingMode: boolean): Promise<{ sessionId: string }> {
+    const managed = this.sessions.get(sessionId)
+    if (!managed) throw new Error(`Session ${sessionId} not found`)
+
+    const summary = await this.generateSessionHandoffSummary(managed)
+    const session = await this.createSession(managed.workspace.id, {
+      permissionMode: managed.permissionMode,
+      thinkingLevel: managed.thinkingLevel,
+      workingDirectory: managed.workingDirectory ?? 'none',
+      model: managed.model,
+      llmConnection: managed.llmConnection,
+      enabledSourceSlugs: managed.enabledSourceSlugs,
+      projectId: managed.projectId,
+      codingMode,
+    })
+
+    const created = this.sessions.get(session.id)
+    if (created && summary) {
+      created.transferredSessionSummary = summary
+      created.transferredSessionSummaryApplied = false
+      this.persistSession(created)
+      await sessionPersistenceQueue.flush(session.id)
+    }
+    sessionLog.info(`Session ${sessionId}: continued in ${session.id} with coding mode ${codingMode ? 'on' : 'off'} (summary: ${summary ? `${summary.length} chars` : 'none'})`)
+    return { sessionId: session.id }
+  }
+
+  /**
    * Generate an AI title for a session from the user's first message.
    * Uses the agent's generateTitle() method which handles provider-specific SDK calls.
    * If no agent exists, creates a temporary one using the session's connection.
@@ -9349,9 +9444,8 @@ export class SessionManager implements ISessionManager {
           // Each API call sends the full conversation history, so we use the latest value
           managed.tokenUsage.inputTokens = event.usage.inputTokens
           // outputTokens and costUsd are accumulated across all turns (total session usage)
-          managed.tokenUsage.outputTokens += event.usage.outputTokens
+          addTurnUsage(managed.tokenUsage, event.usage)
           managed.tokenUsage.totalTokens = managed.tokenUsage.inputTokens + managed.tokenUsage.outputTokens
-          managed.tokenUsage.costUsd += event.usage.costUsd ?? 0
           // Cache tokens reflect current state, not accumulated
           managed.tokenUsage.cacheReadTokens = event.usage.cacheReadTokens ?? 0
           managed.tokenUsage.cacheCreationTokens = event.usage.cacheCreationTokens ?? 0
@@ -9412,7 +9506,23 @@ export class SessionManager implements ISessionManager {
     }
   }
 
+  private readonly turnCompleteListeners = new Set<(sessionId: string) => void>()
+
+  onTurnComplete(listener: (sessionId: string) => void): () => void {
+    this.turnCompleteListeners.add(listener)
+    return () => this.turnCompleteListeners.delete(listener)
+  }
+
   private sendEvent(event: SessionEvent, workspaceId?: string): void {
+    if (event.type === 'complete') {
+      for (const listener of this.turnCompleteListeners) {
+        try {
+          listener(event.sessionId)
+        } catch (error) {
+          sessionLog.warn('turn-complete listener failed:', error)
+        }
+      }
+    }
     if (!this.eventSink) {
       sessionLog.warn('Cannot send event - no event sink')
       return
@@ -9627,7 +9737,11 @@ export class SessionManager implements ISessionManager {
   // Export / Import / Dispatch
   // ============================================
 
-  private async generateRemoteTransferSummary(managed: ManagedSession): Promise<string | null> {
+  /**
+   * Summarize a session's conversation for a handoff into a fresh session: remote transfer and
+   * "continue in a new session" (coding mode switch). Null when there is nothing to summarize.
+   */
+  private async generateSessionHandoffSummary(managed: ManagedSession): Promise<string | null> {
     await this.ensureMessagesLoaded(managed)
 
     const messages = managed.messages
@@ -9709,7 +9823,7 @@ export class SessionManager implements ISessionManager {
     this.persistSession(managed)
     await sessionPersistenceQueue.flush(sessionId)
 
-    const summary = await this.generateRemoteTransferSummary(managed)
+    const summary = await this.generateSessionHandoffSummary(managed)
     if (!summary) {
       sessionLog.warn(`[dispatch] Failed to generate remote transfer summary for ${sessionId}`)
       return null
@@ -9862,6 +9976,8 @@ export class SessionManager implements ISessionManager {
       llmConnection: header.llmConnection,
       connectionLocked: header.connectionLocked,
       thinkingLevel: header.thinkingLevel,
+      // Keeps the SDK session (and its pinned prompt/tool profile) when not forked, so the mode travels with it
+      codingMode: header.codingMode,
       hidden: header.hidden,
       transferredSessionSummary: header.transferredSessionSummary,
       transferredSessionSummaryApplied: header.transferredSessionSummaryApplied,

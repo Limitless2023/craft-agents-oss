@@ -334,6 +334,10 @@ export const REMOTE_ELIGIBLE_CHANNELS = new Set<string>([
   RPC_CHANNELS.settings.TEST_LLM_CONNECTION_SETUP,
   RPC_CHANNELS.settings.GET_DEFAULT_THINKING_LEVEL,
   RPC_CHANNELS.settings.SET_DEFAULT_THINKING_LEVEL,
+  RPC_CHANNELS.settings.GET_AUTO_COMPACT_WINDOW,
+  RPC_CHANNELS.settings.SET_AUTO_COMPACT_WINDOW,
+  RPC_CHANNELS.settings.GET_SUBAGENT_MODEL,
+  RPC_CHANNELS.settings.SET_SUBAGENT_MODEL,
 
   // decisions — the decision layer's settings and keys live on the server whose sessions ask the
   // model (it can reuse that server's LLM connections); the Laya probe tests what that server reaches
@@ -471,6 +475,15 @@ export const REMOTE_ELIGIBLE_CHANNELS = new Set<string>([
 
   // git — workspace filesystem
   RPC_CHANNELS.git.GET_BRANCH,
+  RPC_CHANNELS.git.LIST_REPOS,
+  RPC_CHANNELS.git.CREATE_WORKTREE,
+
+  // prWatch — the PR watcher runs where the session's repo, source credentials and `gh` live
+  RPC_CHANNELS.prWatch.SUBSCRIBE,
+  RPC_CHANNELS.prWatch.UNSUBSCRIBE,
+  RPC_CHANNELS.prWatch.REFRESH,
+  RPC_CHANNELS.prWatch.GET_DETAILS,
+  RPC_CHANNELS.prWatch.CHANGED,
 
   // resources — workspace resource export/import
   RPC_CHANNELS.resources.EXPORT,
