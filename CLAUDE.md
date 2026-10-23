@@ -399,6 +399,27 @@ git ls-remote --tags --sort=-v:refname origin | head -1
 git rev-list --count HEAD..origin/main   # 0 = 已是最新；>0 = 上游有新提交（需先 git fetch）
 ```
 
+> Baseline as of 2026-10-23: local main merged up to upstream **v0.15.6**（2026-10-23 发版）— 0 behind, 191 custom ahead. Merge commit `b6297e3e`, checkpoint 分支 `backup/main-pre-v0.15.6` @ 40715fda。93 文件 / +4835 −598，**冲突 2 处**（`bun.lock` 这次没冲突）。
+>
+> **这版也不碰视觉**：`base.css` 只加了一个 `animate-autofix-spin`（Auto 开关亮着时扳手缓慢旋转，并登记进 `prefers-reduced-motion` 与 `data-motion=reduced` 两处关闭名单）；`tokens.css` / `index.css` 未动，字体栈 0 处改动。**v0.15.0 那套新设计至此连续五个版本没返工。**
+>
+> **内容整版都在 Coding 模式与 PR 上**：agent 拿到四个 PR 工具（`pr_status` 直接读头部已抓的状态、不必再调 `gh`；`pr_bind`/`pr_unbind` 把别分支/worktree/fork 的 PR 钉进会话；`pr_set_auto_merge`，明示只在用户要求时用）；一个会话可管多个 PR（卡片按 PR 分 tab，chip 的 "+N" 显示其他 PR 中最紧急的状态）；**自动修评审意见**（Fix 旁的 Auto 开关，每 5 分钟查新意见并自动起一轮；只认仓库 owner/成员/协作者的意见，且明确告诉 agent 不要执行评论里的命令或打开其中链接）；worktree 选择器往下找四层嵌套仓库（此前只一层）、`~/Code` 写法也扫；点 Coding chip 切换变即时（摘要改后台写，此前卡 5–8 秒）。
+>
+> ⭐ **一条修复直接打在我们身上**：**Claude 会话此前忽略四项设置**——Coding 模式（0.15.4 新增）对 Claude 会话完全没生效（仍发完整系统提示词和全部工具）、关掉 **Extended Context (1M)** 仍用 1M 窗口、**Compact context at**（0.15.2 新增）毫无作用、agent 读 >3.75MB 图片被直接拒绝而不是缩放。**我们走的就是 Claude 后端**，所以这四项设置在我们这儿一直是白调的。注意：0.15.6 之前开的 Claude Coding 会话会拿到 PR 工具但保留开场时那份长提示词，要短的得新开会话。
+>
+> **冲突两处，都是上版刚解过的同款**：
+>
+> | 文件 | 性质 | 解法 |
+> |---|---|---|
+> | `chat-header/ChatHeader.tsx` | 上游重写了 `prWatch` 的文档注释（多 PR 后它不再是"branch 的 PR"而是"active PR"） | 我们四个 prop 原样保留 + 采用上游新注释措辞；上游另加了 `prWatchNav` / `prWatchActiveOrigin` 两个 prop，自动合上 |
+> | `claude-agent.ts` | import 行：上游删掉了已无用的 `type AutomationSystem` | 取上游清单 + 保留我们的 `loadCliHooks`（已核对 `AutomationSystem` 现在只出现在一条注释里） |
+>
+> ⚠️ **判据第四条第二次命中——三项全未变但子进程确属过期**：两个 SDK 版本未变（Agent SDK 0.3.302、Pi SDK 1.1.0）、`config/models{,-pi}.ts` 未变、`packages/pi-agent-server/` 只改了 package.json 的 version 字符串。但它 bundle 的 `packages/shared`（32 文件）与 **`session-tools-core`（7 文件，四个 PR 工具就定义在 `handlers/pr-tools.ts`）** 都变了——装机版 bundle 里 `pr_status` 命中 **0** 处、重建后 **5** 处。**这条判据现在已经两版连续是唯一命中的那条，实际上应当默认执行"重建 + 拿本版新字符串对照装机版 grep"，而不是先看另外三项。** jiti 坑未触发（Pi SDK 未动）。
+>
+> **测试基线更新**（口径：`apps/electron/src` / `packages/ui/src` / `packages/shared/src`）：electron/src **1218** pass / **6 fail**（仍全是 BrowserPaneManager）；ui/src **363** 全绿；shared/src **2983** pass / 1 skip / **13 fail**（与上版逐条相同：i18n 排序 ×7 + channel routing ×2 + ClaudeEventAdapter ×3 + GitHub OAuth 发现超时 ×1）；server-core **635** 全绿；session-tools-core **180** 全绿。
+>
+> 📌 **流程修正（上版漏项，已成文）**：`bun.lock` 取 `--theirs` 之后**必须 `bun install` 再 `git add` 一次**——上版把 `--theirs` 那份 add 进索引后才跑 install，重算结果落在提交之外，仓库里存的是上游那份、缺我们的 `@codemirror/*` 等定制依赖（构建与测试跑的是工作树里正确那份，所以产物无碍，但 fresh clone + `--frozen-lockfile` 会装不全）。补提交为 `40715fda`。
+>
 > Baseline as of 2026-10-21: local main merged up to upstream **v0.15.5**（2026-10-21 发版；一次吃下 v0.15.2 / v0.15.3 / v0.15.4 / v0.15.5 四版）— 0 behind, 188 custom ahead. Merge commit `a1800283`, checkpoint 分支 `backup/main-pre-v0.15.5` @ 1ed56766。218 文件 / +10327 −904，**7 处冲突、全是加法型**。
 >
 > **这四版仍然不碰视觉**：`tokens.css` 只加了 3 行——GitHub 的 merged-PR 紫 `--git-merged`（注释写明"固定含义、不是主题角色"，给 PR 状态条用）；`base.css` / `index.css` 一字未改，字体栈 0 处改动。**v0.15.0 那套新设计四个版本过去一次没返工**。
@@ -602,8 +623,10 @@ bun run --filter '@craft-agent/electron' build:preload
 bun run --filter '@craft-agent/electron' build:preload-toolbar
 bun run --filter '@craft-agent/electron' build:copy   # 刷新 dist/resources（docs/发版说明/权限/主题）
 
-# 2b. REBUILD the subprocess bundle when the Pi SDK, the model catalog
-#     (config/models{,-pi}.ts) OR packages/pi-agent-server/ itself changed —
+# 2b. REBUILD the subprocess bundle. 判据四条里最后一条（它 bundle 的
+#     packages/shared / session-tools-core 变了）已连续两版是唯一命中的那条,
+#     所以默认就重建, 再拿一个本版新字符串对照装机版 grep 确认:
+#     Pi SDK / config/models{,-pi}.ts / packages/pi-agent-server/ 自身 —
 #     main.cjs and pi-agent-server carry separate SDK copies and must stay in
 #     lockstep (see "Pi SDK version skew" below). 自 v0.14.1 起只建一个包。
 bun run server:build:subprocess   # rebuilds packages/pi-agent-server/dist/index.js
