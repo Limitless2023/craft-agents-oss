@@ -18,6 +18,7 @@ import type {
 } from '@craft-agent/core/types'
 import type { PermissionMode } from '../agent/mode-types'
 import type { ThinkingLevel } from '../agent/thinking-levels'
+import type { BoundPr, PrMonitorState } from './pr-watch'
 import type { CustomEndpointConfig } from '../config/llm-connections'
 import type {
   AuthRequest as SharedAuthRequest,
@@ -83,6 +84,10 @@ export interface Session {
   thinkingLevel?: ThinkingLevel
   /** Coding mode: lean coding prompt + session-tool profile (fixed once the session has messages) */
   codingMode?: boolean
+  /** Coding mode: PRs pinned to this session (chat-header PR carousel; see pr_bind / pr_unbind) */
+  boundPrs?: BoundPr[]
+  /** Coding mode: per-PR monitor state (auto-fix), keyed by PR id */
+  prMonitors?: Record<string, PrMonitorState>
   lastMessageRole?: 'user' | 'assistant' | 'plan' | 'tool' | 'error'
   lastFinalMessageId?: string
   isAsyncOperationOngoing?: boolean

@@ -11,6 +11,7 @@
 
 import type { PermissionMode } from '../agent/mode-manager.ts';
 import type { ThinkingLevel } from '../agent/thinking-levels.ts';
+import type { BoundPr, PrMonitorState } from '../protocol/pr-watch.ts';
 import type { StoredAttachment, MessageRole, ToolStatus, AuthRequestType, AuthStatus, CredentialInputMode, StoredMessage, ContextUsageSnapshot } from '@craft-agent/core/types';
 
 /**
@@ -38,6 +39,10 @@ export const SESSION_PERSISTENT_FIELDS = [
   'model', 'llmConnection', 'connectionLocked', 'thinkingLevel',
   // Coding mode (lean coding prompt + tool profile; fixed once the session has messages)
   'codingMode',
+  // Coding mode: PRs pinned to this session (chat-header PR carousel; see protocol/pr-watch BoundPr)
+  'boundPrs',
+  // Coding mode: per-PR monitor state (auto-fix toggle + what it last acted on), keyed by PR id
+  'prMonitors',
   // Sharing
   'sharedUrl', 'sharedId',
   // Plan execution
@@ -164,6 +169,10 @@ export interface SessionConfig {
   thinkingLevel?: ThinkingLevel;
   /** Coding mode: lean coding system prompt and session-tool profile. Fixed once the session has messages. */
   codingMode?: boolean;
+  /** Coding mode: PRs pinned to this session, shown in the chat-header PR carousel (pr_bind / pr_unbind). */
+  boundPrs?: BoundPr[];
+  /** Coding mode: per-PR monitor state (auto-fix), keyed by PR id `host/owner/repo#number`. */
+  prMonitors?: Record<string, PrMonitorState>;
   /**
    * Pending plan execution state - tracks "Accept & Compact" flow.
    * When set, indicates a plan needs to be executed after compaction completes.
@@ -306,6 +315,10 @@ export interface SessionHeader {
   thinkingLevel?: ThinkingLevel;
   /** Coding mode: lean coding system prompt and session-tool profile. Fixed once the session has messages. */
   codingMode?: boolean;
+  /** Coding mode: PRs pinned to this session, shown in the chat-header PR carousel (pr_bind / pr_unbind). */
+  boundPrs?: BoundPr[];
+  /** Coding mode: per-PR monitor state (auto-fix), keyed by PR id `host/owner/repo#number`. */
+  prMonitors?: Record<string, PrMonitorState>;
   /**
    * Pending plan execution state - tracks "Accept & Compact" flow.
    * When set, indicates a plan needs to be executed after compaction completes.
@@ -419,6 +432,10 @@ export interface SessionMetadata {
   thinkingLevel?: ThinkingLevel;
   /** Coding mode: lean coding system prompt and session-tool profile. Fixed once the session has messages. */
   codingMode?: boolean;
+  /** Coding mode: PRs pinned to this session, shown in the chat-header PR carousel (pr_bind / pr_unbind). */
+  boundPrs?: BoundPr[];
+  /** Coding mode: per-PR monitor state (auto-fix), keyed by PR id `host/owner/repo#number`. */
+  prMonitors?: Record<string, PrMonitorState>;
   /** ID of last message user has read - for unread detection */
   lastReadMessageId?: string;
   /** ID of the last final (non-intermediate) assistant message - for unread detection */
